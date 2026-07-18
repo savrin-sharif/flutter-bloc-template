@@ -20,15 +20,16 @@ BOLD='\033[1m'
 RESET='\033[0m'
 HIDE_CURSOR='\033[?25l'
 SHOW_CURSOR='\033[?25h'
+BLINK_CURSOR='\033[5 q'
+DEFAULT_CURSOR='\033[0 q'
 MODERN_UI=false
 [[ -t 0 && -t 1 && "${TERM:-dumb}" != dumb && -z "${NO_COLOR:-}" ]] && MODERN_UI=true
 
-restore_terminal() { [[ "$MODERN_UI" == true ]] && printf '%b' "$SHOW_CURSOR"; }
+restore_terminal() { [[ "$MODERN_UI" == true ]] && printf '%b%b' "$SHOW_CURSOR" "$DEFAULT_CURSOR"; }
 trap restore_terminal EXIT INT TERM
 
 show_intro() {
   [[ "$MODERN_UI" == true ]] || return 0
-  printf '%b' "$HIDE_CURSOR"
 
   if command -v durdraw >/dev/null 2>&1 &&
      [[ -n "${DURDRAW_INTRO_FILE:-}" ]] &&
@@ -37,18 +38,86 @@ show_intro() {
     return 0
   fi
 
-  local glow
-  for glow in 245 39 51; do
-    printf '\033[2J\033[H\n\033[38;5;%sm' "$glow"
-    printf '        ╭──────────────────────────────────────────╮\n'
-    printf '        │                                          │\n'
-    printf '        │          F L U T T E R   B L O C         │\n'
-    printf '        │                                          │\n'
-    printf '        ╰──────────────────────────────────────────╯\n'
-    printf '%b' "$RESET"
-    sleep 0.16
+  printf '\033[2J\033[H\n'
+  printf '        %bF L U T T E R   B L O C%b\n' "$CYAN$BOLD" "$RESET"
+  printf '        %bClean architecture. Your design system.%b\n\n' "$MUTED" "$RESET"
+  printf '%b%b' "$SHOW_CURSOR" "$BLINK_CURSOR"
+}
+
+select_one() {
+  local options=("$@") index=0 key first_render=true count=$# i
+  printf '%b' "$HIDE_CURSOR"
+  while true; do
+    if [[ "$first_render" != true ]]; then printf '\033[%dA' "$count"; fi
+    first_render=false
+    for i in "${!options[@]}"; do
+      printf '\033[2K'
+      if [[ "$i" -eq "$index" ]]; then
+        printf '        %b◆%b  %b%s%b\n' "$CYAN$BOLD" "$RESET" "$GREEN$BOLD" "${options[$i]}" "$RESET"
+      else
+        printf '        %b◇  %s%b\n' "$MUTED" "${options[$i]}" "$RESET"
+      fi
+    done
+
+    IFS= read -rsn1 key
+    [[ -z "$key" ]] && break
+    if [[ "$key" == $'\x1b' ]]; then
+      IFS= read -rsn1 _ || true
+      IFS= read -rsn1 key || true
+      [[ "$key" == A ]] && index=$(( (index - 1 + count) % count ))
+      [[ "$key" == B ]] && index=$(( (index + 1) % count ))
+    fi
   done
-  printf '\n        %bClean architecture. Your design system.%b\n\n' "$MUTED" "$RESET"
+  SELECTED_INDEX="$index"
+  printf '%b%b' "$SHOW_CURSOR" "$BLINK_CURSOR"
+}
+
+select_platforms() {
+  local names=('Android' 'iOS' 'Web' 'Windows' 'macOS' 'Linux')
+  local values=('android' 'ios' 'web' 'windows' 'macos' 'linux')
+  local selected=(1 1 0 0 0 0) index=0 key first_render=true count=${#names[@]} i
+  printf '        %b↑/↓ move  •  Space toggle  •  Enter continue%b\n\n' "$MUTED" "$RESET"
+  printf '%b' "$HIDE_CURSOR"
+  while true; do
+    if [[ "$first_render" != true ]]; then printf '\033[%dA' "$count"; fi
+    first_render=false
+    for i in "${!names[@]}"; do
+      local mark='○'
+      [[ "${selected[$i]}" -eq 1 ]] && mark='●'
+      printf '\033[2K'
+      if [[ "$i" -eq "$index" ]]; then
+        printf '        %b◆%b  ' "$CYAN$BOLD" "$RESET"
+        if [[ "${selected[$i]}" -eq 1 ]]; then
+          printf '%b%s  %s%b\n' "$GREEN$BOLD" "$mark" "${names[$i]}" "$RESET"
+        else
+          printf '%b%s  %s%b\n' "$CYAN$BOLD" "$mark" "${names[$i]}" "$RESET"
+        fi
+      elif [[ "${selected[$i]}" -eq 1 ]]; then
+        printf '        %b◇%b  %b%s  %s%b\n' "$MUTED" "$RESET" "$GREEN$BOLD" "$mark" "${names[$i]}" "$RESET"
+      else
+        printf '        %b◇  %s  %s%b\n' "$MUTED" "$mark" "${names[$i]}" "$RESET"
+      fi
+    done
+
+    IFS= read -rsn1 key
+    [[ -z "$key" ]] && break
+    if [[ "$key" == ' ' ]]; then
+      selected[$index]=$((1 - selected[$index]))
+    elif [[ "$key" == $'\x1b' ]]; then
+      IFS= read -rsn1 _ || true
+      IFS= read -rsn1 key || true
+      [[ "$key" == A ]] && index=$(( (index - 1 + count) % count ))
+      [[ "$key" == B ]] && index=$(( (index + 1) % count ))
+    fi
+  done
+
+  SELECTED_PLATFORMS=''
+  for i in "${!values[@]}"; do
+    [[ "${selected[$i]}" -eq 1 ]] && SELECTED_PLATFORMS+="${values[$i]},"
+  done
+  SELECTED_PLATFORMS="${SELECTED_PLATFORMS%,}"
+  [[ -n "$SELECTED_PLATFORMS" ]] || SELECTED_PLATFORMS='android,ios'
+  printf '%b%b' "$SHOW_CURSOR" "$BLINK_CURSOR"
 }
 
 section() {
@@ -57,6 +126,29 @@ section() {
   else
     printf '\n%s\n' "$2"
   fi
+}
+
+read_input() {
+  local prompt="$1" value='' key cursor='▌'
+  printf '%b%b' "$HIDE_CURSOR" "$BLINK_CURSOR"
+  while true; do
+    printf '\r\033[2K        %s %b%s%b%b%s%b' "$prompt" "$CYAN" "$value" "$RESET" "$CYAN" "$cursor" "$RESET"
+    if IFS= read -rsn1 -t 1 key; then
+      if [[ -z "$key" ]]; then
+        break
+      elif [[ "$key" == $'\x7f' || "$key" == $'\b' ]]; then
+        [[ -n "$value" ]] && value="${value%?}"
+      elif [[ "$key" != $'\x1b' ]]; then
+        value+="$key"
+      fi
+      cursor='▌'
+    else
+      [[ "$cursor" == '▌' ]] && cursor=' ' || cursor='▌'
+    fi
+  done
+  printf '\r\033[2K        %s %b%s%b\n' "$prompt" "$CYAN" "$value" "$RESET"
+  printf '%b%b' "$SHOW_CURSOR" "$BLINK_CURSOR"
+  INPUT_VALUE="$value"
 }
 
 run_step() {
@@ -68,6 +160,7 @@ run_step() {
 
   local log_file="$TEMP_DIR/step.log" pid frame
   local frames=('◐' '◓' '◑' '◒')
+  printf '%b' "$HIDE_CURSOR"
   "$@" >"$log_file" 2>&1 &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
@@ -84,6 +177,7 @@ run_step() {
     tail -n 60 "$log_file" >&2
     exit 1
   fi
+  printf '%b%b' "$SHOW_CURSOR" "$BLINK_CURSOR"
 }
 
 need flutter
@@ -98,20 +192,41 @@ TEMPLATE_BRANCH="${TEMPLATE_BRANCH:-main}"
 show_intro
 section '01' 'Name your Flutter playground'
 
-read -r -p 'Project name (for example, my_app): ' PROJECT_NAME
+if [[ "$MODERN_UI" == true ]]; then
+  read_input 'Project name (for example, my_app):'
+  PROJECT_NAME="$INPUT_VALUE"
+else
+  read -r -p 'Project name (for example, my_app): ' PROJECT_NAME
+fi
 [[ "$PROJECT_NAME" =~ ^[a-z][a-z0-9_]*$ ]] || die 'Use lowercase letters, numbers, and underscores; start with a letter.'
 [[ ! -e "$PROJECT_NAME" ]] || die "Folder '$PROJECT_NAME' already exists."
 
-read -r -p 'App title (for example, My Awesome App): ' APP_TITLE
+if [[ "$MODERN_UI" == true ]]; then
+  read_input 'App title (for example, My Awesome App):'
+  APP_TITLE="$INPUT_VALUE"
+else
+  read -r -p 'App title (for example, My Awesome App): ' APP_TITLE
+fi
 [[ -n "$APP_TITLE" ]] || die 'App title cannot be empty.'
 
-read -r -p 'BASE_URL [https://example.com]: ' BASE_URL
+if [[ "$MODERN_UI" == true ]]; then
+  read_input 'BASE_URL [https://example.com]:'
+  BASE_URL="$INPUT_VALUE"
+else
+  read -r -p 'BASE_URL [https://example.com]: ' BASE_URL
+fi
 BASE_URL="${BASE_URL:-https://example.com}"
 
 section '02' 'Choose your design language'
-printf '  1) MaterialApp + Scaffold\n'
-printf '  2) CupertinoApp + CupertinoPageScaffold\n'
-read -r -p 'Selection [1]: ' DESIGN_CHOICE
+if [[ "$MODERN_UI" == true ]]; then
+  printf '        %bUse ↑/↓ and Enter%b\n\n' "$MUTED" "$RESET"
+  select_one 'Material — MaterialApp + Scaffold' 'Cupertino — CupertinoApp + CupertinoPageScaffold'
+  DESIGN_CHOICE=$((SELECTED_INDEX + 1))
+else
+  printf '  1) MaterialApp + Scaffold\n'
+  printf '  2) CupertinoApp + CupertinoPageScaffold\n'
+  read -r -p 'Selection [1]: ' DESIGN_CHOICE
+fi
 case "${DESIGN_CHOICE:-1}" in
   1|material|Material) DESIGN_STYLE='material' ;;
   2|cupertino|Cupertino) DESIGN_STYLE='cupertino' ;;
@@ -119,12 +234,25 @@ case "${DESIGN_CHOICE:-1}" in
 esac
 
 section '03' 'Configure language support'
-read -r -p 'Enable a bilingual localization system? [y/N]: ' BILINGUAL_CHOICE
+if [[ "$MODERN_UI" == true ]]; then
+  printf '        %bUse ↑/↓ and Enter%b\n\n' "$MUTED" "$RESET"
+  select_one 'Yes — generate ARB + gen-l10n' 'Later — stay dependency-light'
+  [[ "$SELECTED_INDEX" -eq 0 ]] && BILINGUAL_CHOICE=y || BILINGUAL_CHOICE=n
+else
+  read -r -p 'Enable a bilingual localization system? [y/N]: ' BILINGUAL_CHOICE
+fi
 case "${BILINGUAL_CHOICE:-n}" in
   y|Y|yes|YES)
     ENABLE_BILINGUAL=true
-    read -r -p 'Primary language code (for example, en): ' PRIMARY_LOCALE
-    read -r -p 'Secondary language code (for example, bn): ' SECONDARY_LOCALE
+    if [[ "$MODERN_UI" == true ]]; then
+      read_input 'Primary language code (for example, en):'
+      PRIMARY_LOCALE="$INPUT_VALUE"
+      read_input 'Secondary language code (for example, bn):'
+      SECONDARY_LOCALE="$INPUT_VALUE"
+    else
+      read -r -p 'Primary language code (for example, en): ' PRIMARY_LOCALE
+      read -r -p 'Secondary language code (for example, bn): ' SECONDARY_LOCALE
+    fi
     [[ "$PRIMARY_LOCALE" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || die 'Invalid primary locale. Use en, bn, en_US, etc.'
     [[ "$SECONDARY_LOCALE" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || die 'Invalid secondary locale. Use en, bn, en_US, etc.'
     [[ "$PRIMARY_LOCALE" != "$SECONDARY_LOCALE" ]] || die 'Primary and secondary languages must be different.'
@@ -134,8 +262,13 @@ case "${BILINGUAL_CHOICE:-n}" in
 esac
 
 section '04' 'Choose target platforms'
-read -r -p 'Platforms, comma-separated [android,ios]: ' PLATFORMS
-PLATFORMS="${PLATFORMS:-android,ios}"
+if [[ "$MODERN_UI" == true ]]; then
+  select_platforms
+  PLATFORMS="$SELECTED_PLATFORMS"
+else
+  read -r -p 'Platforms, comma-separated [android,ios]: ' PLATFORMS
+  PLATFORMS="${PLATFORMS:-android,ios}"
+fi
 [[ "$PLATFORMS" =~ ^(android|ios|web|windows|macos|linux)(,(android|ios|web|windows|macos|linux))*$ ]] || die 'Invalid platform list.'
 
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flutter-bloc-init.XXXXXX")"

@@ -28,7 +28,7 @@ From this repository, run:
 
 The initializer prompts for the project name, app title, base URL, design style, optional bilingual support, and target platforms. When bilingual support is selected, it asks for primary and secondary locale codes and generates ARB files plus Flutter localization wiring. It then upgrades dependencies and runs formatting, analysis, and tests.
 
-Interactive terminals receive the animated color interface and progress indicators. CI, redirected output, `TERM=dumb`, and `NO_COLOR=1` automatically use plain output. Durdraw is optional; set `DURDRAW_INTRO_FILE=/path/to/intro.dur` to replace the built-in intro with a custom Durdraw animation.
+Interactive terminals receive the color interface, blinking input cursor, keyboard menus, and animated progress indicators. Use ↑/↓ and Enter for single choices; the platform checklist also uses Space to toggle. CI, redirected output, `TERM=dumb`, and `NO_COLOR=1` automatically use plain output. Durdraw is optional; set `DURDRAW_INTRO_FILE=/path/to/intro.dur` to replace the built-in intro with a custom Durdraw animation.
 
 The design prompt offers:
 
