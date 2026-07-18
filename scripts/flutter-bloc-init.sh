@@ -210,12 +210,20 @@ fi
 [[ -n "$APP_TITLE" ]] || die 'App title cannot be empty.'
 
 if [[ "$MODERN_UI" == true ]]; then
-  read_input 'BASE_URL [https://example.com]:'
-  BASE_URL="$INPUT_VALUE"
+  read_input 'PROD_URL [https://api.example.com]:'
+  PROD_URL="$INPUT_VALUE"
+  read_input 'DEV_URL [https://dev-api.example.com]:'
+  DEV_URL="$INPUT_VALUE"
+  read_input 'LOCAL_URL [http://localhost:8080]:'
+  LOCAL_URL="$INPUT_VALUE"
 else
-  read -r -p 'BASE_URL [https://example.com]: ' BASE_URL
+  read -r -p 'PROD_URL [https://api.example.com]: ' PROD_URL
+  read -r -p 'DEV_URL [https://dev-api.example.com]: ' DEV_URL
+  read -r -p 'LOCAL_URL [http://localhost:8080]: ' LOCAL_URL
 fi
-BASE_URL="${BASE_URL:-https://example.com}"
+PROD_URL="${PROD_URL:-https://api.example.com}"
+DEV_URL="${DEV_URL:-https://dev-api.example.com}"
+LOCAL_URL="${LOCAL_URL:-http://localhost:8080}"
 
 section '02' 'Choose your design language'
 if [[ "$MODERN_UI" == true ]]; then
@@ -301,7 +309,9 @@ find "$PROJECT_NAME/lib" "$PROJECT_NAME/test" -type f -name '*.dart' -print0 |
 mkdir -p "$PROJECT_NAME/assets/envs"
 cat > "$PROJECT_NAME/assets/envs/.env" <<EOF
 APP_NAME=$APP_TITLE
-BASE_URL=$BASE_URL
+PROD_URL=$PROD_URL
+DEV_URL=$DEV_URL
+LOCAL_URL=$LOCAL_URL
 APP_DESIGN_STYLE=$DESIGN_STYLE
 EOF
 

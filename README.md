@@ -26,7 +26,7 @@ From this repository, run:
 ./scripts/flutter-bloc-init.sh
 ```
 
-The initializer prompts for the project name, app title, base URL, design style, optional bilingual support, and target platforms. When bilingual support is selected, it asks for primary and secondary locale codes and generates ARB files plus Flutter localization wiring. It then upgrades dependencies and runs formatting, analysis, and tests.
+The initializer prompts for the project name, app title, production/development/local URLs, design style, optional bilingual support, and target platforms. When bilingual support is selected, it asks for primary and secondary locale codes and generates ARB files plus Flutter localization wiring. It then upgrades dependencies and runs formatting, analysis, and tests.
 
 Interactive terminals receive the color interface, blinking input cursor, keyboard menus, and animated progress indicators. Use ↑/↓ and Enter for single choices; the platform checklist also uses Space to toggle. CI, redirected output, `TERM=dumb`, and `NO_COLOR=1` automatically use plain output. Durdraw is optional; set `DURDRAW_INTRO_FILE=/path/to/intro.dur` to replace the built-in intro with a custom Durdraw animation.
 
@@ -50,11 +50,21 @@ Configuration lives in `assets/envs/.env`:
 
 ```dotenv
 APP_NAME=Flutter BLoC Template
-BASE_URL=https://example.com
+PROD_URL=https://api.example.com
+DEV_URL=https://dev-api.example.com
+LOCAL_URL=http://localhost:8080
 APP_DESIGN_STYLE=material
 ```
 
 Set `APP_DESIGN_STYLE` to `material` or `cupertino`. Normally the initializer writes this value based on the user's design prompt.
+
+Endpoint selection is build-safe:
+
+- Release builds always use `PROD_URL`, even if an `APP_ENV` override is supplied.
+- Debug and profile builds use `DEV_URL` by default.
+- Use the local server in a non-release build with `flutter run --dart-define=APP_ENV=local`.
+
+On an Android emulator, `localhost` points to the emulator itself; set `LOCAL_URL` to `http://10.0.2.2:<port>` when the server runs on the host machine.
 
 ## Structure
 
