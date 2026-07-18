@@ -120,6 +120,47 @@ select_platforms() {
   printf '%b%b' "$SHOW_CURSOR" "$BLINK_CURSOR"
 }
 
+choose_language() {
+  local role="$1" excluded="${2:-}" i selection
+  local names=('English' 'Bengali' 'Spanish' 'Arabic' 'Hindi' 'French' 'German' 'Portuguese' 'Chinese' 'Japanese' 'Korean')
+  local codes=('en' 'bn' 'es' 'ar' 'hi' 'fr' 'de' 'pt' 'zh' 'ja' 'ko')
+  local menu_names=() menu_codes=()
+
+  for i in "${!codes[@]}"; do
+    if [[ "${codes[$i]}" != "$excluded" ]]; then
+      menu_names+=("${names[$i]} — ${codes[$i]}")
+      menu_codes+=("${codes[$i]}")
+    fi
+  done
+  menu_names+=('Custom language or regional locale')
+  menu_codes+=('custom')
+
+  if [[ "$MODERN_UI" == true ]]; then
+    printf '\n        %bChoose the %s language with ↑/↓ and Enter%b\n\n' "$MUTED" "$role" "$RESET"
+    select_one "${menu_names[@]}"
+    selection="$SELECTED_INDEX"
+  else
+    printf '\nChoose the %s language:\n' "$role"
+    for i in "${!menu_names[@]}"; do printf '  %d) %s\n' "$((i + 1))" "${menu_names[$i]}"; done
+    read -r -p 'Selection: ' selection
+    [[ "$selection" =~ ^[0-9]+$ ]] || die 'Language selection must be a number.'
+    selection=$((selection - 1))
+    (( selection >= 0 && selection < ${#menu_codes[@]} )) || die 'Invalid language selection.'
+  fi
+
+  CHOSEN_LOCALE="${menu_codes[$selection]}"
+  if [[ "$CHOSEN_LOCALE" == custom ]]; then
+    if [[ "$MODERN_UI" == true ]]; then
+      read_input 'Locale code (for example, it or en_US):'
+      CHOSEN_LOCALE="$INPUT_VALUE"
+    else
+      read -r -p 'Locale code (for example, it or en_US): ' CHOSEN_LOCALE
+    fi
+    [[ "$CHOSEN_LOCALE" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || die 'Invalid locale. Use en, bn, en_US, etc.'
+    [[ "$CHOSEN_LOCALE" != "$excluded" ]] || die 'Primary and secondary languages must be different.'
+  fi
+}
+
 section() {
   if [[ "$MODERN_UI" == true ]]; then
     printf '\n        %b%s%b  %s\n\n' "$PURPLE$BOLD" "$1" "$RESET" "$2"
@@ -252,18 +293,10 @@ fi
 case "${BILINGUAL_CHOICE:-n}" in
   y|Y|yes|YES)
     ENABLE_BILINGUAL=true
-    if [[ "$MODERN_UI" == true ]]; then
-      read_input 'Primary language code (for example, en):'
-      PRIMARY_LOCALE="$INPUT_VALUE"
-      read_input 'Secondary language code (for example, bn):'
-      SECONDARY_LOCALE="$INPUT_VALUE"
-    else
-      read -r -p 'Primary language code (for example, en): ' PRIMARY_LOCALE
-      read -r -p 'Secondary language code (for example, bn): ' SECONDARY_LOCALE
-    fi
-    [[ "$PRIMARY_LOCALE" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || die 'Invalid primary locale. Use en, bn, en_US, etc.'
-    [[ "$SECONDARY_LOCALE" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || die 'Invalid secondary locale. Use en, bn, en_US, etc.'
-    [[ "$PRIMARY_LOCALE" != "$SECONDARY_LOCALE" ]] || die 'Primary and secondary languages must be different.'
+    choose_language primary
+    PRIMARY_LOCALE="$CHOSEN_LOCALE"
+    choose_language secondary "$PRIMARY_LOCALE"
+    SECONDARY_LOCALE="$CHOSEN_LOCALE"
     ;;
   n|N|no|NO|'') ENABLE_BILINGUAL=false ;;
   *) die 'Bilingual selection must be yes or no.' ;;

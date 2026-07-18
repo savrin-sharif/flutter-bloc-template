@@ -26,7 +26,7 @@ From this repository, run:
 ./scripts/flutter-bloc-init.sh
 ```
 
-The initializer prompts for the project name, app title, production/development/local URLs, design style, optional bilingual support, and target platforms. When bilingual support is selected, it asks for primary and secondary locale codes and generates ARB files plus Flutter localization wiring. It then upgrades dependencies and runs formatting, analysis, and tests.
+The initializer prompts for the project name, app title, production/development/local URLs, design style, optional bilingual support, and target platforms. When bilingual support is selected, human-readable menus are shown for the primary and secondary languages; locale codes are assigned automatically. A custom-locale option supports additional languages and regional variants. The generator then creates ARB files and Flutter localization wiring, upgrades dependencies, and runs formatting, analysis, and tests.
 
 Interactive terminals receive the color interface, blinking input cursor, keyboard menus, and animated progress indicators. Use ↑/↓ and Enter for single choices; the platform checklist also uses Space to toggle. CI, redirected output, `TERM=dumb`, and `NO_COLOR=1` automatically use plain output. Durdraw is optional; set `DURDRAW_INTRO_FILE=/path/to/intro.dur` to replace the built-in intro with a custom Durdraw animation.
 
