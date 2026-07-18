@@ -6,6 +6,7 @@ A deliberately small, production-minded Flutter starter using BLoC and clean arc
 
 - Feature-first clean architecture (`data`, `domain`, `presentation`)
 - `flutter_bloc` for predictable state management
+- A reusable async-controller mixin with keyed loading and normalized Dio errors
 - `go_router` shared by `MaterialApp.router` and `CupertinoApp.router`
 - Native `Scaffold`/Material controls and `CupertinoPageScaffold`/Cupertino controls
 - Material/Cupertino design choice during project generation
@@ -76,6 +77,7 @@ lib/
 │   ├── di/                      # Composition root
 │   ├── errors/                  # Shared failure types
 │   ├── network/                 # Dio and connectivity infrastructure
+│   ├── presentation/mixins/     # Reusable, UI-independent BLoC behavior
 │   ├── router/                  # Style-agnostic route graph
 │   └── theme/                   # Material and Cupertino themes
 ├── features/
@@ -88,6 +90,8 @@ lib/
 ```
 
 Dependencies point inward: presentation uses domain; data implements domain contracts; domain does not import Flutter or infrastructure. `core/di/injection.dart` is the only place that assembles implementations.
+
+Feature BLoCs can use `AsyncControllerMixin` to run named operations with immutable loading snapshots, guaranteed cleanup, backend-message extraction, and connection-error classification. It intentionally does not show snack bars, validate forms, or own `TextEditingController`s; those remain UI responsibilities.
 
 ## Add a feature
 
