@@ -103,6 +103,10 @@ Feature BLoCs can use `AsyncControllerMixin` to run named operations with immuta
 
 Avoid creating a shared widget merely because a Flutter widget is used twice. Promote it only when it represents stable app-wide behavior or design language.
 
+## AI development prompt
+
+Import [`docs/AI_DEVELOPMENT_SUPER_PROMPT.md`](docs/AI_DEVELOPMENT_SUPER_PROMPT.md) into an AI coding model before requesting a feature or REST CRUD implementation. Append the real endpoint documentation and acceptance criteria to the prompt so the model follows the API contract instead of inventing request or response fields.
+
 ## Verify
 
 ```sh
