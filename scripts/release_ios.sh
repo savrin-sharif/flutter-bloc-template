@@ -1,33 +1,330 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-cd "$(dirname "$0")/.."
-[[ -f pubspec.yaml ]] || { echo 'Run from a generated Flutter project.' >&2; exit 1; }
+# -----------------------------
+# 🚀 Flutter iOS Release Builder (IPA via Xcode Archive) + Release Name
+# Pass --reuse-version to build with the exact version already in pubspec.yaml.
+# Commands used:
+#   flutter clean
+#   flutter pub get
+#   flutter build ios --release
+# -----------------------------
 
-current="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1)"
-[[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\+([0-9]+)$ ]] || { echo 'Version must use x.y.z+build.' >&2; exit 1; }
-major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[3]}"; build="${BASH_REMATCH[4]}"
-echo 'Bump: 1) major  2) minor  3) patch  4) custom'
-read -r -p 'Selection [3]: ' choice
-case "${choice:-3}" in
-  1) version="$((major + 1)).0.0" ;;
-  2) version="$major.$((minor + 1)).0" ;;
-  3) version="$major.$minor.$((patch + 1))" ;;
-  4) read -r -p 'Version (x.y.z): ' version; [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1 ;;
-  *) echo 'Invalid selection.' >&2; exit 1 ;;
-esac
-build="$((build + 1))"; label="$version+$build"
-perl -i.bak -pe "s/^version:.*/version: $label/" pubspec.yaml && rm -f pubspec.yaml.bak
+reuse_pubspec_version=false
+if [ "${1:-}" = "--reuse-version" ] || [ "${REUSE_PUBSPEC_VERSION:-}" = "1" ]; then
+  reuse_pubspec_version=true
+  bump_level="REUSE"
+  echo "♻️ Reusing the version currently in pubspec.yaml."
+else
+  # 0. Ask user for version bump type
+  echo "🔢 Select version bump type:"
+  select bump_type in "AUTO" "MAJOR" "MINOR" "PATCH" "Custom"; do
+    case $bump_type in
+      AUTO) bump_level="AUTO"; break ;;
+      MAJOR) bump_level="MAJOR"; break ;;
+      MINOR) bump_level="MINOR"; break ;;
+      PATCH) bump_level="PATCH"; break ;;
+      Custom) bump_level="CUSTOM"; break ;;
+      *) echo "❌ Invalid option. Please choose again." ;;
+    esac
+  done
+fi
 
+# 1. New app version (if Custom)
+if [ "$bump_level" == "CUSTOM" ]; then
+  read -r -p "📝 Enter custom version (e.g., 2.1.0): " new_version
+fi
+
+# 2. Read current version and build number
+if [ ! -f "pubspec.yaml" ]; then
+  echo "❌ pubspec.yaml not found. Run this from your Flutter project root."
+  exit 1
+fi
+
+current_version_line=$(grep '^version:' pubspec.yaml || true)
+if [ -z "$current_version_line" ]; then
+  echo "❌ Could not find 'version:' in pubspec.yaml"
+  exit 1
+fi
+
+current_version=$(echo "$current_version_line" | sed -E 's/version: ([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+/\1/')
+current_build_number=$(echo "$current_version_line" | sed -E 's/.*\+([0-9]+)/\1/')
+
+echo "📋 Current version: $current_version +$current_build_number"
+
+if [ "$reuse_pubspec_version" = true ]; then
+  next_version="$current_version"
+  next_build_number="$current_build_number"
+  echo "♻️ Using version: $next_version+$next_build_number"
+else
+  # 2.1 Resolve AUTO baseline from last iOS bump tag
+  auto_base_version="$current_version"
+  auto_base_build="$current_build_number"
+  auto_detected_bump="PATCH"
+  ios_last_bump_tag=""
+
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    ios_last_bump_tag=$(git tag --list --sort=-creatordate \
+      | grep -E '^ios-v[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$' \
+      | head -n 1)
+  fi
+
+  if [ "$bump_level" == "AUTO" ]; then
+  if [ -n "$ios_last_bump_tag" ]; then
+    auto_base_version=$(echo "$ios_last_bump_tag" | sed -E 's/^ios-v([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+$/\1/')
+    auto_base_build=$(echo "$ios_last_bump_tag" | sed -E 's/^ios-v[0-9]+\.[0-9]+\.[0-9]+\+([0-9]+)$/\1/')
+    auto_log=$(git log "$ios_last_bump_tag"..HEAD --pretty=format:"%s%n%b" --no-merges 2>/dev/null || true)
+
+    if echo "$auto_log" | grep -Eqi 'BREAKING CHANGE|^[[:alpha:]][[:alnum:]_-]*(\([^)]+\))?!:'; then
+      auto_detected_bump="MAJOR"
+    elif echo "$auto_log" | grep -Eqi '^feat(\([^)]+\))?:'; then
+      auto_detected_bump="MINOR"
+    else
+      auto_detected_bump="PATCH"
+    fi
+
+    echo "🤖 AUTO base tag: $ios_last_bump_tag (detected $auto_detected_bump bump)"
+  else
+    echo "🤖 AUTO: No iOS bump tag found. Falling back to PATCH from pubspec version."
+  fi
+  fi
+
+# 3. Determine next version
+  resolved_bump_level="$bump_level"
+  version_seed="$current_version"
+  if [ "$bump_level" == "AUTO" ]; then
+    resolved_bump_level="$auto_detected_bump"
+    version_seed="$auto_base_version"
+  fi
+
+  IFS='.' read -r major minor patch <<< "$version_seed"
+
+  if [ "$resolved_bump_level" == "MAJOR" ]; then
+  major=$((major + 1)); minor=0; patch=0
+  next_version="$major.$minor.$patch"
+  if [ "$bump_level" == "AUTO" ]; then
+    echo "🤖 AUTO resolved to MAJOR: $version_seed ➜ $next_version"
+  else
+    echo "🚀 MAJOR bump: $current_version ➜ $next_version"
+  fi
+  elif [ "$resolved_bump_level" == "MINOR" ]; then
+  minor=$((minor + 1)); patch=0
+  next_version="$major.$minor.$patch"
+  if [ "$bump_level" == "AUTO" ]; then
+    echo "🤖 AUTO resolved to MINOR: $version_seed ➜ $next_version"
+  else
+    echo "✨ MINOR bump: $current_version ➜ $next_version"
+  fi
+  elif [ "$resolved_bump_level" == "PATCH" ]; then
+  patch=$((patch + 1))
+  next_version="$major.$minor.$patch"
+  if [ "$bump_level" == "AUTO" ]; then
+    echo "🤖 AUTO resolved to PATCH: $version_seed ➜ $next_version"
+  else
+    echo "🔧 PATCH bump: $current_version ➜ $next_version"
+  fi
+  elif [ "$bump_level" == "CUSTOM" ]; then
+  if ! echo "$new_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "❌ Invalid custom version format. Use x.y.z (e.g., 2.1.0)"
+    exit 1
+  fi
+  next_version="$new_version"
+  echo "📝 Custom version set: $current_version ➜ $next_version"
+  fi
+
+# 4. Always increment build number
+  build_seed="$current_build_number"
+  if [ "$bump_level" == "AUTO" ] && [ "$auto_base_build" -gt "$build_seed" ]; then
+    build_seed="$auto_base_build"
+  fi
+  next_build_number=$((build_seed + 1))
+  echo "🔼 Build number incremented: $build_seed ➜ $next_build_number"
+fi
+
+# 4.1 Release name (App Store Connect - internal)
+read -r -p "🏷️ Enter release name (press Enter for auto): " custom_release_name
+if [ -n "$custom_release_name" ]; then
+  release_name="$custom_release_name"
+else
+  release_name="iOS Production v$next_version+$next_build_number"
+fi
+echo "✅ Release Name: $release_name"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FIX: Capture the last tag BEFORE we create a new one in step 9.
+#      Use `git describe --tags --abbrev=0` against HEAD (not HEAD^) so we get
+#      the most-recent existing tag on any ancestor commit.
+#      If no tags exist at all, fall back to the very first commit so the log
+#      covers the entire history.
+# ──────────────────────────────────────────────────────────────────────────────
+last_tag=""
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+  if [ -z "$last_tag" ]; then
+    # No tags at all — use the root commit so we get the full history
+    last_tag=$(git rev-list --max-parents=0 HEAD 2>/dev/null || true)
+  fi
+fi
+
+# 5. Update pubspec.yaml only when this build owns the version bump.
+if [ "$reuse_pubspec_version" = false ]; then
+  sed -i.bak -E "s/^version: .*/version: $next_version+$next_build_number/" pubspec.yaml
+  rm -f pubspec.yaml.bak
+fi
+
+# 6. Clean + pub get (as requested)
+echo "🧹 flutter clean..."
 flutter clean
-flutter pub get
-flutter analyze
-flutter test
-flutter build ipa --release --build-name="$version" --build-number="$build"
 
-output="build/ios/releases/$label"; mkdir -p "$output"
-for ipa in build/ios/ipa/*.ipa; do
-  [[ -f "$ipa" ]] && cp "$ipa" "$output/$(basename "${ipa%.ipa}")-$label.ipa"
+echo "🔄 flutter pub get..."
+flutter pub get
+
+# 7. Build iOS release (as requested)
+echo "🛠️ Building iOS --release..."
+# Note: This produces an Xcode archive/build; IPA export is typically done from Xcode or xcodebuild export.
+flutter build ios --release --build-number="$next_build_number" --build-name="$next_version"
+
+# 8. Collect artifacts (best-effort)
+# Flutter doesn't always output an .ipa directly with `flutter build ios --release`.
+# We'll capture the main output folder + any generated archive/ipa if present.
+release_folder="build/ios/releases/$next_version+$next_build_number"
+mkdir -p "$release_folder"
+
+# Common output locations (varies by workflow/tooling)
+candidates=(
+  "build/ios/iphoneos/Runner.app"
+  "build/ios/archive/Runner.xcarchive"
+  "build/ios/ipa/Runner.ipa"
+)
+
+found_any=false
+for p in "${candidates[@]}"; do
+  if [ -e "$p" ]; then
+    found_any=true
+    name=$(basename "$p")
+    echo "📦 Found artifact: $p"
+    # Use cp -R for folders, cp for files
+    if [ -d "$p" ]; then
+      cp -R "$p" "$release_folder/$name"
+    else
+      cp "$p" "$release_folder/$name"
+    fi
+  fi
 done
-git log --pretty=format:'- %s' --no-merges -n 8 > "$output/RELEASE_NOTES.txt" 2>/dev/null || echo '- Performance improvements and bug fixes.' > "$output/RELEASE_NOTES.txt"
-echo "IPA created under $output"
+
+if [ "$found_any" = false ]; then
+  echo "⚠️ No standard iOS artifacts found (Runner.app / Runner.xcarchive / Runner.ipa)."
+  echo "   Build succeeded, but export may be needed via Xcode Organizer (Archive -> Distribute) or xcodebuild -exportArchive."
+fi
+
+echo "📁 iOS release folder: $release_folder"
+
+# 9. Git operations (commit + tag)
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git add pubspec.yaml
+
+  if git diff --cached --quiet; then
+    echo "ℹ️ No staged changes to commit."
+  else
+    git commit -m "🔖 Bump version to $next_version+$next_build_number"
+  fi
+
+  tag_name="ios-v$next_version+$next_build_number"
+
+  if git rev-parse "$tag_name" >/dev/null 2>&1; then
+    echo "⚠️ Tag already exists: $tag_name (skipping tag creation)"
+  else
+    git tag "$tag_name"
+    echo "🏷️ Created tag: $tag_name"
+  fi
+else
+  echo "⚠️ Not a git repository. Skipping git commit/tag."
+fi
+
+# 10. Generate user-friendly Release Notes via Claude API
+release_notes_file="$release_folder/RELEASE_NOTES.txt"
+
+echo "🧾 Generating release notes since: ${last_tag:-'(beginning of history)'} ..."
+
+# Collect raw git log (all commits, unfiltered — Claude will decide what's user-relevant)
+# FIX: Use "$last_tag..HEAD" only when last_tag is a ref/tag name.
+#      When it's a commit SHA (first-commit fallback), the same syntax still works.
+#      This now runs AFTER the version-bump commit so it includes everything up to HEAD.
+if [ -n "$last_tag" ]; then
+  raw_log=$(git log "$last_tag"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || true)
+else
+  # Absolute fallback — no git repo or couldn't determine base
+  raw_log=""
+fi
+
+if [ -z "$raw_log" ]; then
+  friendly_notes="- Performance improvements and bug fixes."
+else
+  echo "✨ Rewriting release notes with Claude..."
+
+  # Escape the raw log for safe JSON embedding
+  escaped_log=$(echo "$raw_log" | python3 -c "
+import sys, json
+lines = sys.stdin.read()
+print(json.dumps(lines))
+")
+
+  api_response=$(curl -s https://api.anthropic.com/v1/messages \
+    -H "Content-Type: application/json" \
+    -H "x-api-key: $ANTHROPIC_API_KEY" \
+    -H "anthropic-version: 2023-06-01" \
+    -d "{
+      \"model\": \"claude-sonnet-4-20250514\",
+      \"max_tokens\": 512,
+      \"messages\": [
+        {
+          \"role\": \"user\",
+          \"content\": \"You are writing App Store release notes for end users (not developers). Convert these raw git commit messages into clear, friendly, benefit-focused bullet points that a non-technical user would understand and appreciate. Rules:\\n- Max 6 bullet points\\n- Each bullet starts with a dash (-)\\n- Use plain English, no jargon, no commit prefixes (feat:, fix:, chore:, etc.)\\n- Focus on what the user can NOW do or experience differently\\n- Skip anything that is purely internal (refactor, lint, ci, build, deps, chore, style, test, version bump, signing, pub get, clean, gradle)\\n- Always end with this exact line as the final bullet: - Performance improvements and bug fixes.\\n- Output ONLY the bullet points, nothing else.\\n\\nCommit messages:\\n\" $escaped_log
+        }
+      ]
+    }")
+
+  # Extract text content from API response
+  friendly_notes=$(echo "$api_response" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    text = ''.join(block.get('text','') for block in data.get('content', []) if block.get('type') == 'text')
+    print(text.strip())
+except Exception as e:
+    print('- Performance improvements and bug fixes.')
+")
+
+  # Fallback if empty or API error
+  if [ -z "$friendly_notes" ]; then
+    friendly_notes="- Performance improvements and bug fixes."
+  fi
+fi
+
+cat > "$release_notes_file" <<EOL
+Release name: $release_name
+Version: $next_version ($next_build_number)
+
+What's New:
+$friendly_notes
+EOL
+
+echo "✅ Release notes saved at: $release_notes_file"
+
+# 11. Optional push
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  read -r -p "🚀 Push commit and tags to remote repository? (y/n): " push_answer
+  if [ "$push_answer" = "y" ]; then
+    git push
+    git push --tags
+    echo "✅ Changes and tag pushed to remote."
+  else
+    echo "🛑 Skipped pushing to remote."
+  fi
+fi
+
+# 12. Done
+echo "🎯 iOS release finished: Version $next_version+$next_build_number"
+echo "🏷️ Release Name: $release_name"
+echo "📁 Output folder: $release_folder"
+echo "📝 Notes: $release_notes_file"
