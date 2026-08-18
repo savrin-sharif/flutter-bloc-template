@@ -255,6 +255,14 @@ render_compact_screen() {
   printf '%bF L U T T E R   B L O C%b  %b/%b  %s\n\n' "$CYAN$BOLD" "$RESET" "$MUTED" "$RESET" "$context"
 }
 
+package_identifier() {
+  if [[ "$USE_CUSTOM_ORG" == true ]]; then
+    printf '%s' "$APP_PACKAGE"
+  else
+    printf 'com.example.%s' "$PROJECT_NAME"
+  fi
+}
+
 render_completed_sections() {
   case "$CURRENT_SECTION_NUMBER" in
     02|03|04|05)
@@ -269,7 +277,7 @@ render_completed_sections() {
     03|04|05)
       printf '        %b02%b  %bApp package%b      %s\n\n' \
         "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" \
-        "$([[ "$USE_CUSTOM_ORG" == true ]] && printf '%s.%s' "$APP_ORG" "$PROJECT_NAME" || printf 'com.example.%s' "$PROJECT_NAME")"
+        "$(package_identifier)"
       ;;
   esac
 
@@ -360,8 +368,8 @@ edit_app_package() {
     if [[ "$MODERN_UI" == true ]]; then
       render_compact_screen 'Edit app package'
       printf '        %bCurrent package: %s%b\n\n' "$MUTED" \
-        "$([[ "$USE_CUSTOM_ORG" == true ]] && printf '%s.%s' "$APP_ORG" "$PROJECT_NAME" || printf 'com.example.%s' "$PROJECT_NAME")" "$RESET"
-      select_one 'Keep Flutter default — com.example' 'Use a custom organization identifier' '← Return' 'Exit initializer'
+        "$(package_identifier)" "$RESET"
+      select_one 'Keep Flutter default — com.example' 'Use a custom package identifier' '← Return' 'Exit initializer'
       choice="$SELECTED_INDEX"
     else
       read -r -p 'Package [default/custom/back/exit]: ' choice
@@ -378,17 +386,17 @@ edit_app_package() {
     fi
     while true; do
       if [[ "$MODERN_UI" == true ]]; then
-        read_input 'Organization identifier:' "${APP_ORG:-com.company}"
+        read_input 'Package identifier:' "${APP_PACKAGE:-com.company.app}"
         [[ "$INPUT_ACTION" == back ]] && break
-        APP_ORG="$INPUT_VALUE"
+        APP_PACKAGE="$INPUT_VALUE"
       else
-        read -r -p 'Organization identifier: ' APP_ORG
+        read -r -p 'Package identifier: ' APP_PACKAGE
       fi
-      if [[ "$APP_ORG" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+      if [[ "$APP_PACKAGE" =~ ^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$ ]]; then
         USE_CUSTOM_ORG=true
         return
       fi
-      warning 'Use a lowercase reverse-domain value such as com.company. Please retry.'
+      warning 'Use a complete lowercase package identifier such as app.rydr.drive. Please retry.'
     done
   done
 }
@@ -516,7 +524,7 @@ review_configuration() {
     if [[ "$MODERN_UI" == true ]]; then
       printf '        %bProject%b       %s\n' "$MUTED" "$RESET" "$PROJECT_NAME"
       printf '        %bApp title%b     %s\n' "$MUTED" "$RESET" "$APP_TITLE"
-      printf '        %bPackage%b       %s\n' "$MUTED" "$RESET" "$([[ "$USE_CUSTOM_ORG" == true ]] && printf '%s.%s' "$APP_ORG" "$PROJECT_NAME" || printf 'com.example.%s' "$PROJECT_NAME")"
+      printf '        %bPackage%b       %s\n' "$MUTED" "$RESET" "$(package_identifier)"
       printf '        %bDesign%b        %s\n' "$MUTED" "$RESET" "$DESIGN_STYLE"
       if [[ "$ENABLE_BILINGUAL" == true ]]; then
         printf '        %bLanguages%b     %s + %s\n' "$MUTED" "$RESET" "$PRIMARY_LOCALE" "$SECONDARY_LOCALE"
@@ -537,7 +545,7 @@ review_configuration() {
     else
       printf 'Project: %s\nPackage: %s\nDesign: %s\nPlatforms: %s\n' \
         "$PROJECT_NAME" \
-        "$([[ "$USE_CUSTOM_ORG" == true ]] && printf '%s.%s' "$APP_ORG" "$PROJECT_NAME" || printf 'com.example.%s' "$PROJECT_NAME")" \
+        "$(package_identifier)" \
         "$DESIGN_STYLE" "$PLATFORMS"
       printf '\n  1) Create project\n  2) Edit project details and URLs\n  3) Edit app package\n  4) Edit design language\n  5) Edit language support\n  6) Edit target platforms\n  0) Exit\n'
       read -r -p 'Selection: ' action
@@ -553,20 +561,20 @@ review_configuration() {
         if [[ "$MODERN_UI" == true ]]; then
           render_compact_screen 'Edit app package'
           printf '        %bChoose the package identity for this app.%b\n\n' "$MUTED" "$RESET"
-          select_one 'Keep Flutter default — com.example' 'Use a custom organization identifier' '← Back to review'
+          select_one 'Keep Flutter default — com.example' 'Use a custom package identifier' '← Back to review'
           [[ "$SELECTED_INDEX" -eq 2 ]] && continue
           PACKAGE_CHOICE="$SELECTED_INDEX"
         else
-          read -r -p 'Use custom organization? [y/N/back]: ' value
+          read -r -p 'Use custom package identifier? [y/N/back]: ' value
           [[ "$value" == back ]] && continue
           [[ "$value" =~ ^[Yy]$ ]] && PACKAGE_CHOICE=1 || PACKAGE_CHOICE=0
         fi
         USE_CUSTOM_ORG=false
         if [[ "$PACKAGE_CHOICE" -eq 1 ]]; then
           while true; do
-            if [[ "$MODERN_UI" == true ]]; then read_input 'Organization identifier:'; APP_ORG="$INPUT_VALUE"; else read -r -p 'Organization identifier: ' APP_ORG; fi
-            [[ "$APP_ORG" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]] && { USE_CUSTOM_ORG=true; break; }
-            warning 'Use a value such as com.company. Please retry.'
+            if [[ "$MODERN_UI" == true ]]; then read_input 'Package identifier:' "${APP_PACKAGE:-com.company.app}"; APP_PACKAGE="$INPUT_VALUE"; else read -r -p 'Package identifier: ' APP_PACKAGE; fi
+            [[ "$APP_PACKAGE" =~ ^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$ ]] && { USE_CUSTOM_ORG=true; break; }
+            warning 'Use a complete value such as app.rydr.drive. Please retry.'
           done
         fi
         ;;
@@ -691,7 +699,7 @@ section "$CURRENT_SECTION_NUMBER" "$CURRENT_SECTION_TITLE"
 if [[ "$MODERN_UI" == true ]]; then
   while true; do
     printf '        %bUse ↑/↓ and Enter%b\n\n' "$MUTED" "$RESET"
-    select_one 'Keep Flutter default — com.example' 'Use a custom organization identifier' '← Edit project details' 'Exit initializer'
+    select_one 'Keep Flutter default — com.example' 'Use a custom package identifier' '← Edit project details' 'Exit initializer'
     PACKAGE_CHOICE="$SELECTED_INDEX"
     [[ "$PACKAGE_CHOICE" -eq 2 ]] && { edit_project_details; continue; }
     [[ "$PACKAGE_CHOICE" -eq 3 ]] && exit_program
@@ -699,7 +707,7 @@ if [[ "$MODERN_UI" == true ]]; then
   done
 else
   while true; do
-    printf '  0) Exit\n  1) Keep Flutter default — com.example\n  2) Use a custom organization identifier\n  b) Edit project details\n'
+    printf '  0) Exit\n  1) Keep Flutter default — com.example\n  2) Use a custom package identifier\n  b) Edit project details\n'
     read -r -p 'Selection [1]: ' PACKAGE_CHOICE
     [[ "$PACKAGE_CHOICE" == 0 ]] && exit_program
     [[ "$PACKAGE_CHOICE" == b || "$PACKAGE_CHOICE" == back ]] && { edit_project_details; continue; }
@@ -715,18 +723,18 @@ USE_CUSTOM_ORG=false
 if [[ "$PACKAGE_CHOICE" -eq 1 ]]; then
   while true; do
     if [[ "$MODERN_UI" == true ]]; then
-      read_input 'Organization identifier (for example, com.company):'
+      read_input 'Package identifier (for example, app.rydr.drive):'
       [[ "$INPUT_ACTION" == back ]] && { edit_project_details; continue; }
-      APP_ORG="$INPUT_VALUE"
+      APP_PACKAGE="$INPUT_VALUE"
     else
-      read -r -p 'Organization identifier (or "exit"): ' APP_ORG
-      exit_if_requested "$APP_ORG"
+      read -r -p 'Package identifier (or "exit"): ' APP_PACKAGE
+      exit_if_requested "$APP_PACKAGE"
     fi
-    if [[ "$APP_ORG" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+    if [[ "$APP_PACKAGE" =~ ^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$ ]]; then
       USE_CUSTOM_ORG=true
       break
     fi
-    warning 'Use a lowercase reverse-domain value such as com.company. Please retry.'
+    warning 'Use a complete lowercase package identifier such as app.rydr.drive. Please retry.'
   done
 fi
 
@@ -816,8 +824,24 @@ fi
 
 section '07' 'Building your playground'
 CREATE_ARGS=(create --platforms="$PLATFORMS" --project-name="$PROJECT_NAME")
-if [[ "$USE_CUSTOM_ORG" == true ]]; then CREATE_ARGS+=(--org="$APP_ORG"); fi
 run_step 'Creating Flutter project' flutter "${CREATE_ARGS[@]}" "$PROJECT_NAME"
+
+if [[ "$USE_CUSTOM_ORG" == true ]]; then
+  GENERATED_ANDROID_PACKAGE="com.example.$PROJECT_NAME"
+  APPLE_PROJECT_SUFFIX="$(printf '%s' "$PROJECT_NAME" | perl -pe 's/_([a-z0-9])/\U$1/g')"
+  GENERATED_APPLE_PACKAGE="com.example.$APPLE_PROJECT_SUFFIX"
+  PACKAGE_TARGETS=()
+  for platform_dir in android ios macos linux; do
+    [[ -d "$PROJECT_NAME/$platform_dir" ]] && PACKAGE_TARGETS+=("$PROJECT_NAME/$platform_dir")
+  done
+  if (( ${#PACKAGE_TARGETS[@]} > 0 )); then
+    for generated_package in "$GENERATED_ANDROID_PACKAGE" "$GENERATED_APPLE_PACKAGE"; do
+      while IFS= read -r package_file; do
+        perl -i -pe "s/\\Q$generated_package\\E/$APP_PACKAGE/g" "$package_file"
+      done < <(grep -IlR -- "$generated_package" "${PACKAGE_TARGETS[@]}" || true)
+    done
+  fi
+fi
 
 for path in lib assets test scripts docs analysis_options.yaml README.md pubspec.yaml; do
   if [[ -e "$TEMPLATE_DIR/$path" ]]; then
