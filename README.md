@@ -31,6 +31,8 @@ The initializer prompts for the project name, app title, production/development/
 
 The entered app title is the single display-name source: it is written to `APP_NAME` and synchronized with the generated Android, iOS, macOS, web, Windows, and Linux metadata.
 
+Each generated `pubspec.yaml` receives its Dart SDK constraint from the active Flutter toolchain instead of retaining the template's minimum SDK version. For example, an installed Dart `3.13.0` produces `sdk: ^3.13.0`.
+
 Interactive terminals receive the color interface, blinking input cursor, keyboard menus, and animated progress indicators. During initial text setup, ↑ or ← returns to the previous field. Every later menu provides access to completed configuration sections, allowing individual values to be changed without clearing other selections. Use ↑/↓ and Enter for menu choices; the platform checklist uses Space to toggle and B to edit previous configuration. Before generation, a review screen also lets users revisit any section repeatedly. Press Esc or Ctrl+C to exit at any time. Failed Git or Flutter steps show Retry and Exit choices instead of terminating immediately. CI and plain output provide equivalent editing, review, retry, and exit prompts.
 
 The design prompt offers:

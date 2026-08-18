@@ -678,8 +678,16 @@ review_configuration() {
 }
 
 need flutter
+need dart
 need git
 need perl
+
+DART_VERSION_OUTPUT=''
+if ! DART_VERSION_OUTPUT="$(dart --version 2>&1)"; then
+  die "Unable to read the active Dart SDK version: $DART_VERSION_OUTPUT"
+fi
+DART_SDK_VERSION="$(printf '%s\n' "$DART_VERSION_OUTPUT" | perl -ne 'print $1 if /Dart SDK version:\s*([0-9]+\.[0-9]+\.[0-9]+)/')"
+[[ -n "$DART_SDK_VERSION" ]] || die 'Unable to detect the active Dart SDK version.'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_TEMPLATE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -909,6 +917,9 @@ if [[ "$MODERN_UI" == true ]]; then
 fi
 
 perl -i -pe "s/^name: flutter_bloc_template\$/name: $PROJECT_NAME/" "$PROJECT_NAME/pubspec.yaml"
+perl -i -pe "s/^  sdk: \^[0-9]+\.[0-9]+\.[0-9]+\$/  sdk: ^$DART_SDK_VERSION/" "$PROJECT_NAME/pubspec.yaml"
+grep -q "^  sdk: \^$DART_SDK_VERSION\$" "$PROJECT_NAME/pubspec.yaml" || \
+  die 'Unable to update the generated Dart SDK constraint.'
 find "$PROJECT_NAME/lib" "$PROJECT_NAME/test" -type f -name '*.dart' -print0 |
   xargs -0 perl -i -pe "s/package:flutter_bloc_template/package:$PROJECT_NAME/g"
 
