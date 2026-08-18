@@ -29,6 +29,8 @@ From this repository, run:
 
 The initializer prompts for the project name, app title, production/development/local URLs, optional complete package identifier, design style, optional bilingual support, and target platforms. The package step can retain Flutter's generated `com.example.<project_name>` default or accept an exact reverse-domain identifier such as `app.rydr.drive`; the project name is not appended to a custom identifier. When bilingual support is selected, human-readable menus are shown for the primary and secondary languages; locale codes are assigned automatically. A custom-locale option supports additional languages and regional variants. The generator then creates ARB files and Flutter localization wiring, upgrades dependencies, and runs formatting, analysis, and tests.
 
+The entered app title is the single display-name source: it is written to `APP_NAME` and synchronized with the generated Android, iOS, macOS, web, Windows, and Linux metadata.
+
 Interactive terminals receive the color interface, blinking input cursor, keyboard menus, and animated progress indicators. During initial text setup, ↑ or ← returns to the previous field. Every later menu provides access to completed configuration sections, allowing individual values to be changed without clearing other selections. Use ↑/↓ and Enter for menu choices; the platform checklist uses Space to toggle and B to edit previous configuration. Before generation, a review screen also lets users revisit any section repeatedly. Press Esc or Ctrl+C to exit at any time. Failed Git or Flutter steps show Retry and Exit choices instead of terminating immediately. CI and plain output provide equivalent editing, review, retry, and exit prompts.
 
 The design prompt offers:

@@ -263,6 +263,60 @@ package_identifier() {
   fi
 }
 
+apply_native_app_name() {
+  local project_dir="$1" app_title_xml app_title_json
+  app_title_xml="$(perl -e '$s = shift; $s =~ s/&/&amp;/g; $s =~ s/</&lt;/g; $s =~ s/>/&gt;/g; $s =~ s/"/&quot;/g; $s =~ s/'"'"'/&apos;/g; print $s' "$APP_TITLE")"
+  app_title_json="$(perl -MJSON::PP -e 'print encode_json($ARGV[0])' "$APP_TITLE")"
+
+  if [[ -f "$project_dir/android/app/src/main/AndroidManifest.xml" ]]; then
+    APP_TITLE_XML="$app_title_xml" perl -0777 -i -pe \
+      's{(android:label=")[^"]*(")}{$1$ENV{APP_TITLE_XML}$2}' \
+      "$project_dir/android/app/src/main/AndroidManifest.xml"
+  fi
+
+  if [[ -f "$project_dir/ios/Runner/Info.plist" ]]; then
+    APP_TITLE_XML="$app_title_xml" perl -0777 -i -pe \
+      's{(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)}{$1$ENV{APP_TITLE_XML}$2}; s{(<key>CFBundleName</key>\s*<string>)[^<]*(</string>)}{$1$ENV{APP_TITLE_XML}$2}' \
+      "$project_dir/ios/Runner/Info.plist"
+  fi
+
+  if [[ -f "$project_dir/macos/Runner/Info.plist" ]]; then
+    APP_TITLE_XML="$app_title_xml" perl -0777 -i -pe \
+      's{(<key>CFBundleName</key>\s*<string>)[^<]*(</string>)}{$1$ENV{APP_TITLE_XML}$2}' \
+      "$project_dir/macos/Runner/Info.plist"
+  fi
+
+  if [[ -f "$project_dir/web/manifest.json" ]]; then
+    APP_TITLE_JSON="$app_title_json" perl -0777 -i -pe \
+      's{("name"\s*:\s*)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}; s{("short_name"\s*:\s*)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}' \
+      "$project_dir/web/manifest.json"
+  fi
+
+  if [[ -f "$project_dir/web/index.html" ]]; then
+    APP_TITLE_XML="$app_title_xml" perl -0777 -i -pe \
+      's{(<meta name="apple-mobile-web-app-title" content=")[^"]*(")}{$1$ENV{APP_TITLE_XML}$2}; s{(<title>)[^<]*(</title>)}{$1$ENV{APP_TITLE_XML}$2}' \
+      "$project_dir/web/index.html"
+  fi
+
+  if [[ -f "$project_dir/windows/runner/main.cpp" ]]; then
+    APP_TITLE_JSON="$app_title_json" perl -0777 -i -pe \
+      's{(window\.Create\(L)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}' \
+      "$project_dir/windows/runner/main.cpp"
+  fi
+
+  if [[ -f "$project_dir/windows/runner/Runner.rc" ]]; then
+    APP_TITLE_JSON="$app_title_json" perl -0777 -i -pe \
+      's{(VALUE "FileDescription",\s*)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}; s{(VALUE "ProductName",\s*)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}' \
+      "$project_dir/windows/runner/Runner.rc"
+  fi
+
+  if [[ -f "$project_dir/linux/runner/my_application.cc" ]]; then
+    APP_TITLE_JSON="$app_title_json" perl -0777 -i -pe \
+      's{(gtk_header_bar_set_title\(header_bar,\s*)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}; s{(gtk_window_set_title\(window,\s*)"[^"]*"}{$1$ENV{APP_TITLE_JSON}}' \
+      "$project_dir/linux/runner/my_application.cc"
+  fi
+}
+
 render_completed_sections() {
   case "$CURRENT_SECTION_NUMBER" in
     02|03|04|05)
@@ -825,6 +879,7 @@ fi
 section '07' 'Building your playground'
 CREATE_ARGS=(create --platforms="$PLATFORMS" --project-name="$PROJECT_NAME")
 run_step 'Creating Flutter project' flutter "${CREATE_ARGS[@]}" "$PROJECT_NAME"
+apply_native_app_name "$PROJECT_NAME"
 
 if [[ "$USE_CUSTOM_ORG" == true ]]; then
   GENERATED_ANDROID_PACKAGE="com.example.$PROJECT_NAME"
