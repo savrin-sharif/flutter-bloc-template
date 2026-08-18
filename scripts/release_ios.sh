@@ -3,7 +3,7 @@ set -e
 
 # -----------------------------
 # 🚀 Flutter iOS Release Builder (IPA via Xcode Archive) + Release Name
-# Pass --reuse-version to build with the exact version already in pubspec.yaml.
+# Choose REUSE interactively, or pass --reuse-version for a non-interactive build.
 # Commands used:
 #   flutter clean
 #   flutter pub get
@@ -11,20 +11,34 @@ set -e
 # -----------------------------
 
 reuse_pubspec_version=false
-if [ "${1:-}" = "--reuse-version" ] || [ "${REUSE_PUBSPEC_VERSION:-}" = "1" ]; then
+dry_run=false
+for argument in "$@"; do
+  case "$argument" in
+    --reuse-version) reuse_pubspec_version=true ;;
+    --dry-run) dry_run=true ;;
+  esac
+done
+
+if [ "$reuse_pubspec_version" = true ] || [ "${REUSE_PUBSPEC_VERSION:-}" = "1" ]; then
   reuse_pubspec_version=true
   bump_level="REUSE"
   echo "♻️ Reusing the version currently in pubspec.yaml."
 else
   # 0. Ask user for version bump type
   echo "🔢 Select version bump type:"
-  select bump_type in "AUTO" "MAJOR" "MINOR" "PATCH" "Custom"; do
+  select bump_type in "AUTO" "MAJOR" "MINOR" "PATCH" "Custom" "REUSE current version"; do
     case $bump_type in
       AUTO) bump_level="AUTO"; break ;;
       MAJOR) bump_level="MAJOR"; break ;;
       MINOR) bump_level="MINOR"; break ;;
       PATCH) bump_level="PATCH"; break ;;
       Custom) bump_level="CUSTOM"; break ;;
+      "REUSE current version")
+        reuse_pubspec_version=true
+        bump_level="REUSE"
+        echo "♻️ Reusing the version currently in pubspec.yaml."
+        break
+        ;;
       *) echo "❌ Invalid option. Please choose again." ;;
     esac
   done
@@ -141,6 +155,58 @@ else
   echo "🔼 Build number incremented: $build_seed ➜ $next_build_number"
 fi
 
+# Preview the release version and notes without changing project or Git state.
+if [ "$dry_run" = true ]; then
+  preview_last_tag=""
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    preview_last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+  fi
+
+  if [ -n "$preview_last_tag" ]; then
+    preview_log=$(git log "$preview_last_tag"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || true)
+  else
+    preview_log=""
+  fi
+
+  preview_filtered=$(echo "$preview_log" | grep -Ev \
+    '^(🔖|chore:|refactor:|build:|ci:|style:|test:|docs:|bump|version|format|lint|pub get|clean|signing|release signing|update gradle)' \
+    || true)
+  preview_user_facing=$(echo "$preview_filtered" | grep -E \
+    '^(feat:|fix:|perf:|improvement:|ui:|ux:|hotfix:|security:)' \
+    || true)
+  [ -n "$preview_user_facing" ] || preview_user_facing="$preview_filtered"
+  preview_list=$(echo "$preview_user_facing" \
+    | sed -E 's/^(feat:|fix:|perf:|improvement:|ui:|ux:|hotfix:|security:)[ ]*//I' \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+    | awk 'NF && !seen[$0]++' | head -n 8)
+
+  if [ -z "$preview_last_tag" ]; then
+    preview_heading="Initial Release"
+    preview_intro="Welcome to Protocol People."
+    preview_list="Mark daily attendance with a simple swipe
+View attendance history and monthly overview
+Apply for leave and track request status
+View payslips and salary details
+Receive announcements and in-app notifications
+Manage notification preferences and app settings"
+  else
+    preview_heading="What's New"
+    preview_intro="Thanks for using Protocol People."
+    [ -n "$preview_list" ] || preview_list="Performance improvements and bug fixes."
+  fi
+
+  echo ""
+  echo "🔎 DRY RUN — no files, builds, commits, tags, or remote branches will be changed."
+  echo "Would use version: $next_version+$next_build_number"
+  echo ""
+  echo "**Version $next_version — $preview_heading**"
+  echo ""
+  echo "$preview_intro"
+  echo ""
+  echo "$preview_list" | sed 's/^/- /'
+  exit 0
+fi
+
 # 4.1 Release name (App Store Connect - internal)
 read -r -p "🏷️ Enter release name (press Enter for auto): " custom_release_name
 if [ -n "$custom_release_name" ]; then
@@ -154,16 +220,12 @@ echo "✅ Release Name: $release_name"
 # FIX: Capture the last tag BEFORE we create a new one in step 9.
 #      Use `git describe --tags --abbrev=0` against HEAD (not HEAD^) so we get
 #      the most-recent existing tag on any ancestor commit.
-#      If no tags exist at all, fall back to the very first commit so the log
-#      covers the entire history.
+#      Leave it empty when no prior iOS tag exists so we can generate the
+#      dedicated initial-release notes.
 # ──────────────────────────────────────────────────────────────────────────────
 last_tag=""
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
-  if [ -z "$last_tag" ]; then
-    # No tags at all — use the root commit so we get the full history
-    last_tag=$(git rev-list --max-parents=0 HEAD 2>/dev/null || true)
-  fi
 fi
 
 # 5. Update pubspec.yaml only when this build owns the version bump.
@@ -241,72 +303,62 @@ else
   echo "⚠️ Not a git repository. Skipping git commit/tag."
 fi
 
-# 10. Generate user-friendly Release Notes via Claude API
+# 10. Generate store-ready release notes from user-facing Git commits.
 release_notes_file="$release_folder/RELEASE_NOTES.txt"
 
 echo "🧾 Generating release notes since: ${last_tag:-'(beginning of history)'} ..."
 
-# Collect raw git log (all commits, unfiltered — Claude will decide what's user-relevant)
-# FIX: Use "$last_tag..HEAD" only when last_tag is a ref/tag name.
-#      When it's a commit SHA (first-commit fallback), the same syntax still works.
-#      This now runs AFTER the version-bump commit so it includes everything up to HEAD.
 if [ -n "$last_tag" ]; then
   raw_log=$(git log "$last_tag"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || true)
 else
-  # Absolute fallback — no git repo or couldn't determine base
   raw_log=""
 fi
 
-if [ -z "$raw_log" ]; then
-  friendly_notes="- Performance improvements and bug fixes."
+filtered_log=$(echo "$raw_log" | grep -Ev \
+  '^(🔖|chore:|refactor:|build:|ci:|style:|test:|docs:|bump|version|format|lint|pub get|clean|signing|release signing|update gradle)' \
+  || true)
+
+user_facing=$(echo "$filtered_log" | grep -E \
+  '^(feat:|fix:|perf:|improvement:|ui:|ux:|hotfix:|security:)' \
+  || true)
+
+if [ -z "$user_facing" ]; then
+  user_facing="$filtered_log"
+fi
+
+cleaned=$(echo "$user_facing" \
+  | sed -E 's/^(feat:|fix:|perf:|improvement:|ui:|ux:|hotfix:|security:)[ ]*//I' \
+  | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+  | awk 'NF')
+
+deduped=$(echo "$cleaned" | awk '!seen[$0]++')
+final_list=$(echo "$deduped" | head -n 8)
+
+if [ -z "$last_tag" ]; then
+  release_heading="Initial Release"
+  release_intro="Welcome to Protocol People."
+  final_list="Mark daily attendance with a simple swipe
+View attendance history and monthly overview
+Apply for leave and track request status
+View payslips and salary details
+Receive announcements and in-app notifications
+Manage notification preferences and app settings"
 else
-  echo "✨ Rewriting release notes with Claude..."
-
-  # Escape the raw log for safe JSON embedding
-  escaped_log=$(echo "$raw_log" | python3 -c "
-import sys, json
-lines = sys.stdin.read()
-print(json.dumps(lines))
-")
-
-  api_response=$(curl -s https://api.anthropic.com/v1/messages \
-    -H "Content-Type: application/json" \
-    -H "x-api-key: $ANTHROPIC_API_KEY" \
-    -H "anthropic-version: 2023-06-01" \
-    -d "{
-      \"model\": \"claude-sonnet-4-20250514\",
-      \"max_tokens\": 512,
-      \"messages\": [
-        {
-          \"role\": \"user\",
-          \"content\": \"You are writing App Store release notes for end users (not developers). Convert these raw git commit messages into clear, friendly, benefit-focused bullet points that a non-technical user would understand and appreciate. Rules:\\n- Max 6 bullet points\\n- Each bullet starts with a dash (-)\\n- Use plain English, no jargon, no commit prefixes (feat:, fix:, chore:, etc.)\\n- Focus on what the user can NOW do or experience differently\\n- Skip anything that is purely internal (refactor, lint, ci, build, deps, chore, style, test, version bump, signing, pub get, clean, gradle)\\n- Always end with this exact line as the final bullet: - Performance improvements and bug fixes.\\n- Output ONLY the bullet points, nothing else.\\n\\nCommit messages:\\n\" $escaped_log
-        }
-      ]
-    }")
-
-  # Extract text content from API response
-  friendly_notes=$(echo "$api_response" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    text = ''.join(block.get('text','') for block in data.get('content', []) if block.get('type') == 'text')
-    print(text.strip())
-except Exception as e:
-    print('- Performance improvements and bug fixes.')
-")
-
-  # Fallback if empty or API error
-  if [ -z "$friendly_notes" ]; then
-    friendly_notes="- Performance improvements and bug fixes."
+  release_heading="What's New"
+  release_intro="Thanks for using Protocol People."
+  if [ -z "$final_list" ]; then
+    final_list="Performance improvements and bug fixes."
   fi
 fi
 
-cat > "$release_notes_file" <<EOL
-Release name: $release_name
-Version: $next_version ($next_build_number)
+bullets=$(echo "$final_list" | sed 's/^/- /')
 
-What's New:
-$friendly_notes
+cat > "$release_notes_file" <<EOL
+**Version $next_version — $release_heading**
+
+$release_intro
+
+$bullets
 EOL
 
 echo "✅ Release notes saved at: $release_notes_file"

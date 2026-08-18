@@ -3,24 +3,38 @@ set -e
 
 # -----------------------------
 # 🚀 Flutter AAB Release Builder + Play-Store Style Release Notes + Release Name
-# Pass --reuse-version to build with the exact version already in pubspec.yaml.
+# Choose REUSE interactively, or pass --reuse-version for a non-interactive build.
 # -----------------------------
 
 reuse_pubspec_version=false
-if [ "${1:-}" = "--reuse-version" ] || [ "${REUSE_PUBSPEC_VERSION:-}" = "1" ]; then
+dry_run=false
+for argument in "$@"; do
+  case "$argument" in
+    --reuse-version) reuse_pubspec_version=true ;;
+    --dry-run) dry_run=true ;;
+  esac
+done
+
+if [ "$reuse_pubspec_version" = true ] || [ "${REUSE_PUBSPEC_VERSION:-}" = "1" ]; then
   reuse_pubspec_version=true
   bump_level="REUSE"
   echo "♻️ Reusing the version currently in pubspec.yaml."
 else
   # 0. Ask user for version bump type
   echo "🔢 Select version bump type:"
-  select bump_type in "AUTO" "MAJOR" "MINOR" "PATCH" "Custom"; do
+  select bump_type in "AUTO" "MAJOR" "MINOR" "PATCH" "Custom" "REUSE current version"; do
     case $bump_type in
       AUTO) bump_level="AUTO"; break ;;
       MAJOR) bump_level="MAJOR"; break ;;
       MINOR) bump_level="MINOR"; break ;;
       PATCH) bump_level="PATCH"; break ;;
       Custom) bump_level="CUSTOM"; break ;;
+      "REUSE current version")
+        reuse_pubspec_version=true
+        bump_level="REUSE"
+        echo "♻️ Reusing the version currently in pubspec.yaml."
+        break
+        ;;
       *) echo "❌ Invalid option. Please choose again." ;;
     esac
   done
@@ -137,6 +151,58 @@ else
   echo "🔼 Build number incremented: $build_seed ➜ $next_build_number"
 fi
 
+# Preview the release version and notes without changing project or Git state.
+if [ "$dry_run" = true ]; then
+  preview_last_tag=""
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    preview_last_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+  fi
+
+  if [ -n "$preview_last_tag" ]; then
+    preview_log=$(git log "$preview_last_tag"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || true)
+  else
+    preview_log=""
+  fi
+
+  preview_filtered=$(echo "$preview_log" | grep -Ev \
+    '^(🔖|chore:|refactor:|build:|ci:|style:|test:|docs:|bump|version|format|lint|pub get|clean|signing|release signing|update gradle)' \
+    || true)
+  preview_user_facing=$(echo "$preview_filtered" | grep -E \
+    '^(feat:|fix:|perf:|improvement:|ui:|ux:|hotfix:|security:)' \
+    || true)
+  [ -n "$preview_user_facing" ] || preview_user_facing="$preview_filtered"
+  preview_list=$(echo "$preview_user_facing" \
+    | sed -E 's/^(feat:|fix:|perf:|improvement:|ui:|ux:|hotfix:|security:)[ ]*//I' \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+    | awk 'NF && !seen[$0]++' | head -n 8)
+
+  if [ -z "$preview_last_tag" ]; then
+    preview_heading="Initial Release"
+    preview_intro="Welcome to Protocol People."
+    preview_list="Mark daily attendance with a simple swipe
+View attendance history and monthly overview
+Apply for leave and track request status
+View payslips and salary details
+Receive announcements and in-app notifications
+Manage notification preferences and app settings"
+  else
+    preview_heading="What's New"
+    preview_intro="Thanks for using Protocol People."
+    [ -n "$preview_list" ] || preview_list="Performance improvements and bug fixes."
+  fi
+
+  echo ""
+  echo "🔎 DRY RUN — no files, builds, commits, tags, or remote branches will be changed."
+  echo "Would use version: $next_version+$next_build_number"
+  echo ""
+  echo "**Version $next_version — $preview_heading**"
+  echo ""
+  echo "$preview_intro"
+  echo ""
+  echo "$preview_list" | sed 's/^/- /'
+  exit 0
+fi
+
 # 4.1 Release name (for Play Console - internal)
 # Optional override prompt
 read -r -p "🏷️ Enter release name (press Enter for auto): " custom_release_name
@@ -204,14 +270,18 @@ fi
 # 10. Generate Play-Store style Release Notes (clean + no author + no bump/refactor chores)
 release_notes_file="$release_folder/RELEASE_NOTES.txt"
 
-last_tag="initial"
+last_tag=""
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "initial")
+  last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
 fi
 
-echo "🧾 Generating Play Store style release notes from: $last_tag ..."
+echo "🧾 Generating store-ready release notes from: ${last_tag:-'(initial release)'} ..."
 
-raw_log=$(git log "$last_tag"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || true)
+if [ -n "$last_tag" ]; then
+  raw_log=$(git log "$last_tag"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || true)
+else
+  raw_log=""
+fi
 
 filtered_log=$(echo "$raw_log" | grep -Ev \
   '^(🔖|chore:|refactor:|build:|ci:|style:|test:|docs:|bump|version|format|lint|pub get|clean|signing|release signing|update gradle)' \
@@ -233,18 +303,31 @@ cleaned=$(echo "$user_facing" \
 deduped=$(echo "$cleaned" | awk '!seen[$0]++')
 final_list=$(echo "$deduped" | head -n 8)
 
-if [ -z "$final_list" ]; then
-  final_list="Performance improvements and bug fixes."
+if [ -z "$last_tag" ]; then
+  release_heading="Initial Release"
+  release_intro="Welcome to Protocol People."
+  final_list="Mark daily attendance with a simple swipe
+View attendance history and monthly overview
+Apply for leave and track request status
+View payslips and salary details
+Receive announcements and in-app notifications
+Manage notification preferences and app settings"
+else
+  release_heading="What's New"
+  release_intro="Thanks for using Protocol People."
+  if [ -z "$final_list" ]; then
+    final_list="Performance improvements and bug fixes."
+  fi
 fi
 
 # shellcheck disable=SC2001
 bullets=$(echo "$final_list" | sed 's/^/- /')
 
 cat > "$release_notes_file" <<EOL
-Release name: $release_name
-Version: v$next_version+$next_build_number
+**Version $next_version — $release_heading**
 
-Release notes (en-US):
+$release_intro
+
 $bullets
 EOL
 
