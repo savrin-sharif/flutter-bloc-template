@@ -48,9 +48,12 @@ Before changing anything:
    configuration and existing root/page implementation. Preserve that choice.
 6. Check whether localization was generated. If it exists, add user-facing text
    through ARB files; otherwise keep strings easy to localize later.
-7. Inspect the closest existing feature and follow its naming, imports, state,
+7. Always inspect `lib/shared/` before creating UI. Search its widgets,
+   components, extensions, and utilities for existing buttons, form fields,
+   loaders, empty/error states, dialogs, cards, and other reusable behavior.
+8. Inspect the closest existing feature and follow its naming, imports, state,
    dependency-injection, routing, and testing conventions.
-8. Check the current Git diff before editing. Preserve unrelated user changes.
+9. Check the current Git diff before editing. Preserve unrelated user changes.
 
 Do not replace BLoC with GetX, Riverpod, Provider, or another state manager. Do
 not add a second HTTP client, service locator, router, or competing architecture.
@@ -70,6 +73,7 @@ lib/
 │   ├── presentation/mixins/     # Shared BLoC behavior
 │   ├── router/                  # go_router graph
 │   └── theme/                   # Material/Cupertino themes
+├── shared/                      # Existing cross-feature UI and utilities
 └── features/<feature>/
     ├── data/
     │   ├── datasources/         # Dio/local persistence calls
@@ -97,8 +101,17 @@ presentation ──> domain <── data
 - Data implements domain repository contracts.
 - Presentation calls use cases, not Dio or data sources directly.
 - Register concrete implementations only in `core/di/injection.dart`.
-- Shared widgets are added only for stable, genuinely cross-feature behavior.
-  Prefer feature-local widgets over speculative global abstractions.
+- Always search `lib/shared/` before implementing a widget or UI utility. Reuse
+  a suitable shared component instead of recreating or copying it.
+- Extend an existing shared component only when the change remains backward
+  compatible and genuinely reusable. Do not break existing consumers to satisfy
+  one feature.
+- If no suitable shared component exists, create a new widget under
+  `lib/shared/` when it is required and represents app-wide design-system or
+  reusable cross-feature behavior. Give it a focused, configurable API and add
+  tests for meaningful behavior.
+- Keep genuinely one-off or feature-specific UI under the feature's
+  `presentation/widgets/` directory.
 
 ## REST API rules
 
@@ -312,6 +325,17 @@ add a transformer package unless needed; use the APIs already available first.
 
 ## UI rules
 
+- Before writing UI code, inspect `lib/shared/` and search for reusable buttons,
+  text fields, selectors, loaders, cards, dialogs, snack bars, empty/error
+  states, responsive wrappers, spacing helpers, and adaptive controls.
+- Use the existing shared component when it satisfies the requirement. Do not
+  create differently named duplicates with the same purpose.
+- If a shared component is close but insufficient, prefer a small compatible
+  extension or composition over copying its implementation. Add or update its
+  tests when behavior changes.
+- When no existing component can meet the requirement cleanly, create a new
+  shared widget if it will be reused or belongs to the app-wide design system;
+  do not force duplication merely to avoid adding a shared component.
 - BLoCs do not own `BuildContext`, `TextEditingController`, `FocusNode`,
   `GlobalKey<FormState>`, dialogs, snack bars, or navigation.
 - Stateful widgets own and dispose text/focus controllers.
@@ -424,6 +448,8 @@ Before declaring completion, confirm:
 - [ ] Errors are user-safe and retain useful backend messages.
 - [ ] Existing content remains usable during isolated mutations.
 - [ ] BLoCs contain no widget lifecycle or navigation objects.
+- [ ] `lib/shared/` was inspected and suitable reusable components were reused.
+- [ ] Any required new shared widget has a focused API and appropriate tests.
 - [ ] DI and routes are complete.
 - [ ] Material/Cupertino and localization choices are preserved.
 - [ ] Unrelated files and user changes are untouched.
