@@ -12,6 +12,26 @@ job is to inspect it, understand its selected options, implement the requested
 feature completely, and verify it. Do not merely provide sample code when you
 have access to the project files.
 
+## Generated project profile
+
+The initializer records the user's final reviewed configuration here. Treat
+these values as the selected defaults, then verify them against the project when
+you have access to its files.
+
+| Setting | Selected value |
+|---|---|
+| Project name | {{PROJECT_NAME}} |
+| App title | {{APP_TITLE}} |
+| Package identifier | {{PACKAGE_IDENTIFIER}} |
+| Design language | {{DESIGN_STYLE}} |
+| Localization | {{LOCALIZATION}} |
+| Target platforms | {{PLATFORMS}} |
+| Dart SDK constraint | ^{{DART_SDK_VERSION}} |
+
+If this profile still contains `{{PLACEHOLDERS}}`, the document is the source
+template rather than a generated copy. Inspect the project configuration before
+making design-dependent changes.
+
 ## First: understand this project
 
 Before changing anything:
@@ -420,4 +440,3 @@ higher priority than generic examples in this prompt.
 
 [PASTE API DOCUMENTATION OR EXAMPLE REQUESTS/RESPONSES HERE]
 ```
-

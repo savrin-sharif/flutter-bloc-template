@@ -263,6 +263,10 @@ package_identifier() {
   fi
 }
 
+markdown_escape() {
+  perl -e '$s = shift; $s =~ s/\\/\\\\/g; $s =~ s/\|/\\|/g; $s =~ s/`/\\`/g; print $s' "$1"
+}
+
 apply_native_app_name() {
   local project_dir="$1" app_title_xml app_title_json
   app_title_xml="$(perl -e '$s = shift; $s =~ s/&/&amp;/g; $s =~ s/</&lt;/g; $s =~ s/>/&gt;/g; $s =~ s/"/&quot;/g; $s =~ s/'"'"'/&apos;/g; print $s' "$APP_TITLE")"
@@ -912,6 +916,35 @@ for path in lib assets test scripts docs analysis_options.yaml README.md pubspec
     cp -R "$TEMPLATE_DIR/$path" "$PROJECT_NAME/$path"
   fi
 done
+
+PROMPT_PATH="$PROJECT_NAME/docs/AI_DEVELOPMENT_SUPER_PROMPT.md"
+if [[ -f "$PROMPT_PATH" ]]; then
+  if [[ "$DESIGN_STYLE" == cupertino ]]; then
+    DESIGN_PROFILE='Cupertino — APP_DESIGN_STYLE=cupertino'
+  else
+    DESIGN_PROFILE='Material — APP_DESIGN_STYLE=material'
+  fi
+  if [[ "$ENABLE_BILINGUAL" == true ]]; then
+    LOCALIZATION_PROFILE="Enabled — $PRIMARY_LOCALE + $SECONDARY_LOCALE"
+  else
+    LOCALIZATION_PROFILE='Not generated — add later'
+  fi
+
+  PROFILE_PROJECT_NAME="$(markdown_escape "$PROJECT_NAME")" \
+  PROFILE_APP_TITLE="$(markdown_escape "$APP_TITLE")" \
+  PROFILE_PACKAGE="$(markdown_escape "$(package_identifier)")" \
+  PROFILE_DESIGN="$(markdown_escape "$DESIGN_PROFILE")" \
+  PROFILE_LOCALIZATION="$(markdown_escape "$LOCALIZATION_PROFILE")" \
+  PROFILE_PLATFORMS="$(markdown_escape "$PLATFORMS")" \
+  PROFILE_DART_SDK="$DART_SDK_VERSION" \
+    perl -i -pe \
+      's/\{\{PROJECT_NAME\}\}/$ENV{PROFILE_PROJECT_NAME}/g; s/\{\{APP_TITLE\}\}/$ENV{PROFILE_APP_TITLE}/g; s/\{\{PACKAGE_IDENTIFIER\}\}/$ENV{PROFILE_PACKAGE}/g; s/\{\{DESIGN_STYLE\}\}/$ENV{PROFILE_DESIGN}/g; s/\{\{LOCALIZATION\}\}/$ENV{PROFILE_LOCALIZATION}/g; s/\{\{PLATFORMS\}\}/$ENV{PROFILE_PLATFORMS}/g; s/\{\{DART_SDK_VERSION\}\}/$ENV{PROFILE_DART_SDK}/g' \
+      "$PROMPT_PATH"
+
+  grep -q '{{DESIGN_STYLE}}' "$PROMPT_PATH" && \
+    die 'Unable to stamp the selected design language into the AI prompt.'
+fi
+
 if [[ "$MODERN_UI" == true ]]; then
   printf '        %b✓%b  %-34s\n' "$GREEN$BOLD" "$RESET" 'Applying clean architecture'
 fi

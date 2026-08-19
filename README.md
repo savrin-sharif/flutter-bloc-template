@@ -111,6 +111,8 @@ Avoid creating a shared widget merely because a Flutter widget is used twice. Pr
 
 Import [`docs/AI_DEVELOPMENT_SUPER_PROMPT.md`](docs/AI_DEVELOPMENT_SUPER_PROMPT.md) into an AI coding model before requesting a feature or REST CRUD implementation. Append the real endpoint documentation and acceptance criteria to the prompt so the model follows the API contract instead of inventing request or response fields.
 
+The initializer stamps the generated copy of this prompt with the reviewed project name, app title, package identifier, Material/Cupertino selection, localization choice, target platforms, and Dart SDK constraint.
+
 ## Verify
 
 ```sh
