@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/config/app_config.dart';
-import '../bloc/home_bloc.dart';
+import '../bloc/welcome_bloc.dart';
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+class WelcomePage extends StatelessWidget {
+  const WelcomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     final isCupertino = AppConfig.designStyle == AppDesignStyle.cupertino;
-    final body = const SafeArea(child: _HomeBody());
+    final body = const SafeArea(child: _WelcomeBody());
 
     if (isCupertino) {
       return CupertinoPageScaffold(
@@ -27,25 +27,27 @@ class HomePage extends StatelessWidget {
   }
 }
 
-class _HomeBody extends StatelessWidget {
-  const _HomeBody();
+class _WelcomeBody extends StatelessWidget {
+  const _WelcomeBody();
 
   @override
   Widget build(BuildContext context) {
     final isCupertino = AppConfig.designStyle == AppDesignStyle.cupertino;
-    return BlocBuilder<HomeBloc, HomeState>(
+    return BlocBuilder<WelcomeBloc, WelcomeState>(
       builder: (context, state) {
-        if (state.status == HomeStatus.loading ||
-            state.status == HomeStatus.initial) {
+        if (state.status == WelcomeStatus.loading ||
+            state.status == WelcomeStatus.initial) {
           return Center(
             child: isCupertino
                 ? const CupertinoActivityIndicator()
                 : const CircularProgressIndicator(),
           );
         }
-        if (state.status == HomeStatus.failure) {
+        if (state.status == WelcomeStatus.failure) {
           return Center(
-            child: Text(state.errorMessage ?? 'Unable to load the template.'),
+            child: Text(
+              state.errorMessage ?? 'Unable to load the welcome page.',
+            ),
           );
         }
         return Center(

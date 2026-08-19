@@ -1037,11 +1037,11 @@ class App extends StatelessWidget {
 }
 EOF
 
-  perl -0777 -i -pe "s|(import '../../../../core/config/app_config.dart';)|import 'package:$PROJECT_NAME/l10n/generated/app_localizations.dart';\n\n\$1|" "$PROJECT_NAME/lib/features/home/presentation/pages/home_page.dart"
-  perl -i -pe 's/state\.info!\.title/AppLocalizations.of(context).welcomeTitle/g; s/state\.info!\.description/AppLocalizations.of(context).welcomeMessage/g' "$PROJECT_NAME/lib/features/home/presentation/pages/home_page.dart"
+  perl -0777 -i -pe "s|(import '../../../../core/config/app_config.dart';)|import 'package:$PROJECT_NAME/l10n/generated/app_localizations.dart';\n\n\$1|" "$PROJECT_NAME/lib/features/welcome/presentation/pages/welcome_page.dart"
+  perl -i -pe 's/state\.info!\.title/AppLocalizations.of(context).welcomeTitle/g; s/state\.info!\.description/AppLocalizations.of(context).welcomeMessage/g' "$PROJECT_NAME/lib/features/welcome/presentation/pages/welcome_page.dart"
 
   perl -0777 -i -pe "s|(import 'package:flutter_dotenv/flutter_dotenv.dart';)|import 'package:$PROJECT_NAME/l10n/generated/app_localizations.dart';\n\$1|" "$PROJECT_NAME/test/widget_test.dart"
-  perl -0777 -i -pe 's/const MaterialApp\(home: HomePage\(\)\)/MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const HomePage())/g; s/const CupertinoApp\(home: HomePage\(\)\)/CupertinoApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const HomePage())/g' "$PROJECT_NAME/test/widget_test.dart"
+  perl -0777 -i -pe 's/const MaterialApp\(home: WelcomePage\(\)\)/MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const WelcomePage())/g; s/const CupertinoApp\(home: WelcomePage\(\)\)/CupertinoApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const WelcomePage())/g' "$PROJECT_NAME/test/widget_test.dart"
 
   cat >> "$PROJECT_NAME/assets/envs/.env" <<EOF
 PRIMARY_LOCALE=$PRIMARY_LOCALE

@@ -2,45 +2,45 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/presentation/mixins/async_controller_mixin.dart';
-import '../../domain/entities/template_info.dart';
-import '../../domain/usecases/get_template_info.dart';
+import '../../domain/entities/welcome_info.dart';
+import '../../domain/usecases/get_welcome_info.dart';
 
-sealed class HomeEvent extends Equatable {
-  const HomeEvent();
+sealed class WelcomeEvent extends Equatable {
+  const WelcomeEvent();
   @override
   List<Object?> get props => [];
 }
 
-final class HomeStarted extends HomeEvent {
-  const HomeStarted();
+final class WelcomeStarted extends WelcomeEvent {
+  const WelcomeStarted();
 }
 
-enum HomeStatus { initial, loading, success, failure }
+enum WelcomeStatus { initial, loading, success, failure }
 
-class HomeState extends Equatable {
-  const HomeState({
-    this.status = HomeStatus.initial,
+class WelcomeState extends Equatable {
+  const WelcomeState({
+    this.status = WelcomeStatus.initial,
     this.info,
     this.errorMessage,
     this.isConnectionError = false,
     this.activeOperations = const <String>{},
   });
 
-  final HomeStatus status;
-  final TemplateInfo? info;
+  final WelcomeStatus status;
+  final WelcomeInfo? info;
   final String? errorMessage;
   final bool isConnectionError;
   final Set<String> activeOperations;
 
   bool get isLoading => activeOperations.isNotEmpty;
 
-  HomeState copyWith({
-    HomeStatus? status,
-    TemplateInfo? info,
+  WelcomeState copyWith({
+    WelcomeStatus? status,
+    WelcomeInfo? info,
     String? errorMessage,
     bool? isConnectionError,
     Set<String>? activeOperations,
-  }) => HomeState(
+  }) => WelcomeState(
     status: status ?? this.status,
     info: info ?? this.info,
     errorMessage: errorMessage,
@@ -58,30 +58,33 @@ class HomeState extends Equatable {
   ];
 }
 
-class HomeBloc extends Bloc<HomeEvent, HomeState>
-    with AsyncControllerMixin<HomeEvent, HomeState> {
-  HomeBloc(this._getTemplateInfo) : super(const HomeState()) {
-    on<HomeStarted>(_onStarted);
+class WelcomeBloc extends Bloc<WelcomeEvent, WelcomeState>
+    with AsyncControllerMixin<WelcomeEvent, WelcomeState> {
+  WelcomeBloc(this._getWelcomeInfo) : super(const WelcomeState()) {
+    on<WelcomeStarted>(_onStarted);
   }
 
-  final GetTemplateInfo _getTemplateInfo;
+  final GetWelcomeInfo _getWelcomeInfo;
 
-  Future<void> _onStarted(HomeStarted event, Emitter<HomeState> emit) async {
-    await runControllerTask<TemplateInfo>(
-      key: 'load-home',
+  Future<void> _onStarted(
+    WelcomeStarted event,
+    Emitter<WelcomeState> emit,
+  ) async {
+    await runControllerTask<WelcomeInfo>(
+      key: 'load-welcome',
       emit: emit,
-      task: _getTemplateInfo.call,
+      task: _getWelcomeInfo.call,
       onLoadingChanged: (current, operations) => current.copyWith(
-        status: operations.isEmpty ? current.status : HomeStatus.loading,
+        status: operations.isEmpty ? current.status : WelcomeStatus.loading,
         activeOperations: operations,
       ),
       onSuccess: (current, info) => current.copyWith(
-        status: HomeStatus.success,
+        status: WelcomeStatus.success,
         info: info,
         isConnectionError: false,
       ),
       onFailure: (current, error) => current.copyWith(
-        status: HomeStatus.failure,
+        status: WelcomeStatus.failure,
         errorMessage: error.message,
         isConnectionError: error.isConnectionError,
       ),

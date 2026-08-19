@@ -85,7 +85,7 @@ lib/
 │   ├── router/                  # Style-agnostic route graph
 │   └── theme/                   # Material and Cupertino themes
 ├── features/
-│   ├── home/
+│   ├── welcome/                 # Generic generated-project landing feature
 │   │   ├── data/                # Data sources and repository implementations
 │   │   ├── domain/              # Entities, contracts, and use cases
 │   │   └── presentation/        # BLoCs and pages

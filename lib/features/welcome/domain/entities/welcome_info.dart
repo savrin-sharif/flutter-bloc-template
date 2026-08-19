@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
-class TemplateInfo extends Equatable {
-  const TemplateInfo({required this.title, required this.description});
+class WelcomeInfo extends Equatable {
+  const WelcomeInfo({required this.title, required this.description});
   final String title;
   final String description;
 
