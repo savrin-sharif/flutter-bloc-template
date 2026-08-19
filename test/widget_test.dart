@@ -6,7 +6,7 @@ import 'package:flutter_bloc_template/features/welcome/domain/entities/welcome_i
 import 'package:flutter_bloc_template/features/welcome/domain/repositories/welcome_repository.dart';
 import 'package:flutter_bloc_template/features/welcome/domain/usecases/get_welcome_info.dart';
 import 'package:flutter_bloc_template/features/welcome/presentation/bloc/welcome_bloc.dart';
-import 'package:flutter_bloc_template/features/welcome/presentation/pages/welcome_page.dart';
+import 'package:flutter_bloc_template/features/welcome/presentation/pages/playground_page.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,8 +29,8 @@ void main() {
         BlocProvider.value(
           value: bloc,
           child: style == AppDesignStyle.material
-              ? const MaterialApp(home: WelcomePage())
-              : const CupertinoApp(home: WelcomePage()),
+              ? const MaterialApp(home: PlaygroundPage())
+              : const CupertinoApp(home: PlaygroundPage()),
         ),
       );
       await tester.pumpAndSettle();

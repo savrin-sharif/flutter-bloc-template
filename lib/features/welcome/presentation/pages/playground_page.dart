@@ -5,8 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/config/app_config.dart';
 import '../bloc/welcome_bloc.dart';
 
-class WelcomePage extends StatelessWidget {
-  const WelcomePage({super.key});
+class PlaygroundPage extends StatelessWidget {
+  const PlaygroundPage({super.key});
 
   @override
   Widget build(BuildContext context) {

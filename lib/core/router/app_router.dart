@@ -3,20 +3,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/welcome/presentation/bloc/welcome_bloc.dart';
-import '../../features/welcome/presentation/pages/welcome_page.dart';
+import '../../features/welcome/presentation/pages/playground_page.dart';
 import '../di/injection.dart';
 
 abstract final class AppRoutes {
-  static const welcome = '/';
+  static const playground = '/play-ground';
 }
 
 final appRouter = GoRouter(
+  initialLocation: AppRoutes.playground,
   routes: [
     GoRoute(
-      path: AppRoutes.welcome,
+      path: AppRoutes.playground,
       builder: (context, state) => BlocProvider(
         create: (_) => getIt<WelcomeBloc>()..add(const WelcomeStarted()),
-        child: const WelcomePage(),
+        child: const PlaygroundPage(),
       ),
     ),
   ],
