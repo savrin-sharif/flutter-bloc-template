@@ -19,4 +19,4 @@ The template keeps routing, themes, dependency injection, and features independe
 4. Add the generated `localizationsDelegates` and `supportedLocales` to both branches in `lib/app/app.dart`.
 5. Read translated presentation text with `AppLocalizations.of(context)`. Keep translated strings out of domain entities and data sources.
 
-You can also rerun `scripts/flutter-bloc-init.sh` for a new project and answer **yes** to its bilingual prompt to generate this setup automatically.
+You can also use the template initializer to create a new project and answer **yes** to its bilingual prompt to generate this setup automatically. The initializer itself is intentionally not copied into generated projects.

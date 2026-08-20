@@ -910,12 +910,28 @@ if [[ "$USE_CUSTOM_ORG" == true ]]; then
   fi
 fi
 
-for path in lib assets test scripts docs analysis_options.yaml README.md pubspec.yaml; do
+for path in lib assets test docs analysis_options.yaml README.md pubspec.yaml; do
   if [[ -e "$TEMPLATE_DIR/$path" ]]; then
     rm -rf "$PROJECT_NAME/$path"
     cp -R "$TEMPLATE_DIR/$path" "$PROJECT_NAME/$path"
   fi
 done
+
+if [[ -d "$TEMPLATE_DIR/scripts" ]]; then
+  mkdir -p "$PROJECT_NAME/scripts"
+  while IFS= read -r -d '' script_file; do
+    cp "$script_file" "$PROJECT_NAME/scripts/"
+  done < <(
+    find "$TEMPLATE_DIR/scripts" -maxdepth 1 -type f \
+      ! -name 'flutter-bloc-init.sh' -print0
+  )
+fi
+
+if [[ -f "$PROJECT_NAME/README.md" ]]; then
+  perl -0777 -i -pe \
+    's/\n## Generate a project\n.*?(?=\n## Run this template directly)/\n/s; s/^## Run this template directly$/## Run the project/m' \
+    "$PROJECT_NAME/README.md"
+fi
 
 PROMPT_PATH="$PROJECT_NAME/docs/AI_DEVELOPMENT_SUPER_PROMPT.md"
 if [[ -f "$PROMPT_PATH" ]]; then
