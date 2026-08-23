@@ -116,7 +116,9 @@ presentation ──> domain <── data
 ## REST API rules
 
 The existing singleton `Dio` is the only REST client. It already uses
-`AppConfig.baseUrl`, timeouts, JSON accept headers, and debug logging.
+`AppConfig.baseUrl`, timeouts, JSON accept headers, and the debug-only
+`HttpLoggerInterceptor`. Use the registered singleton `LoggerService` for
+application diagnostics; do not introduce direct `print` or `debugPrint` calls.
 
 Environment behavior is intentional:
 

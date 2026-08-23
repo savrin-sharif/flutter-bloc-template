@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
+import '../logging/http_logger_interceptor.dart';
+import '../logging/logger_service.dart';
 
-Dio createDioClient() {
+Dio createDioClient(LoggerService logger) {
   final dio = Dio(
     BaseOptions(
       baseUrl: AppConfig.baseUrl,
@@ -14,13 +16,7 @@ Dio createDioClient() {
   );
 
   if (kDebugMode) {
-    dio.interceptors.add(
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        logPrint: (message) => debugPrint(message.toString()),
-      ),
-    );
+    dio.interceptors.add(HttpLoggerInterceptor(logger));
   }
   return dio;
 }
