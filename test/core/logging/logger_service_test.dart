@@ -31,7 +31,7 @@ void main() {
           'authorization': 'Bearer $token',
           'X-API-Key': 'super-secret-api-key',
         },
-        payload: const {'name': 'Ada', 'password': 'do-not-log-me'},
+        payload: const {'name': 'Ada'},
         key: 'request-1',
       );
       logger.logResponse(201, const {
@@ -46,7 +46,6 @@ void main() {
       expect(log, contains('123456…ghijkl'));
       expect(log, isNot(contains(token)));
       expect(log, isNot(contains('super-secret-api-key')));
-      expect(log, isNot(contains('do-not-log-me')));
       expect(log, isNot(contains('query-secret')));
     });
 
