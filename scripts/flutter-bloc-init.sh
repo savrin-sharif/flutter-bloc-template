@@ -910,7 +910,7 @@ if [[ "$USE_CUSTOM_ORG" == true ]]; then
   fi
 fi
 
-for path in lib assets test docs analysis_options.yaml README.md pubspec.yaml; do
+for path in lib assets test docs AGENTS.md analysis_options.yaml README.md pubspec.yaml; do
   if [[ -e "$TEMPLATE_DIR/$path" ]]; then
     rm -rf "$PROJECT_NAME/$path"
     cp -R "$TEMPLATE_DIR/$path" "$PROJECT_NAME/$path"
@@ -933,7 +933,7 @@ if [[ -f "$PROJECT_NAME/README.md" ]]; then
     "$PROJECT_NAME/README.md"
 fi
 
-PROMPT_PATH="$PROJECT_NAME/docs/AI_DEVELOPMENT_SUPER_PROMPT.md"
+PROMPT_PATH="$PROJECT_NAME/AGENTS.md"
 if [[ -f "$PROMPT_PATH" ]]; then
   if [[ "$DESIGN_STYLE" == cupertino ]]; then
     DESIGN_PROFILE='Cupertino — APP_DESIGN_STYLE=cupertino'
@@ -958,7 +958,7 @@ if [[ -f "$PROMPT_PATH" ]]; then
       "$PROMPT_PATH"
 
   grep -q '{{DESIGN_STYLE}}' "$PROMPT_PATH" && \
-    die 'Unable to stamp the selected design language into the AI prompt.'
+    die 'Unable to stamp the selected design language into AGENTS.md.'
 fi
 
 if [[ "$MODERN_UI" == true ]]; then
@@ -1037,6 +1037,7 @@ class App extends StatelessWidget {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: appRouter,
+        builder: AppTheme.withSystemUiOverlay,
       );
     }
 
@@ -1048,6 +1049,7 @@ class App extends StatelessWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: appRouter,
+      builder: AppTheme.withSystemUiOverlay,
     );
   }
 }

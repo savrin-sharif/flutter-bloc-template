@@ -15,7 +15,11 @@ class App extends StatelessWidget {
         title: AppConfig.appName,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.cupertino,
+        // Material widgets used inside Cupertino routes (text fields,
+        // date pickers, etc.) require MaterialLocalizations.
+        localizationsDelegates: const [DefaultMaterialLocalizations.delegate],
         routerConfig: appRouter,
+        builder: AppTheme.withSystemUiOverlay,
       );
     }
 
@@ -25,6 +29,7 @@ class App extends StatelessWidget {
       theme: AppTheme.materialLight,
       darkTheme: AppTheme.materialDark,
       routerConfig: appRouter,
+      builder: AppTheme.withSystemUiOverlay,
     );
   }
 }

@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_bloc_template/core/logging/logger_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,6 +50,81 @@ void main() {
       expect(log, isNot(contains(token)));
       expect(log, isNot(contains('super-secret-api-key')));
       expect(log, isNot(contains('query-secret')));
+    });
+
+    test('fully redacts non-authorization secrets', () {
+      logger
+        ..logRequest(
+          'GET',
+          Uri.parse('https://api.example.com/items?api_key=a&api_key=b&q=ok'),
+          headers: const {'Cookie': 'session=abcdef1234567890'},
+          key: 'request-1',
+        )
+        ..logResponse(200, const {'ok': true}, key: 'request-1');
+
+      final log = output.join('\n');
+      expect(log, isNot(contains('abcdef')));
+      expect(log, isNot(contains('api_key=a')));
+      expect(log, contains('q=ok'));
+    });
+
+    test('redacts sensitive keys inside JSON sent as strings', () {
+      logger
+        ..logRequest(
+          'POST',
+          Uri.parse('https://api.example.com/login'),
+          payload: '{"email":"ada@example.com","password":"hunter22"}',
+          key: 'request-1',
+        )
+        ..logResponse(
+          200,
+          '{"access_token":"jwt-secret","user":"Ada"}',
+          key: 'request-1',
+        );
+
+      final log = output.join('\n');
+      expect(log, contains('ada@example.com'));
+      expect(log, contains('Ada'));
+      expect(log, isNot(contains('hunter22')));
+      expect(log, isNot(contains('jwt-secret')));
+    });
+
+    test('summarizes multipart and binary bodies safely', () {
+      final form = FormData.fromMap({
+        'name': 'Avatar',
+        'password': 'hunter22',
+        'file': MultipartFile.fromBytes([1, 2, 3], filename: 'avatar.png'),
+      });
+      logger
+        ..logRequest(
+          'POST',
+          Uri.parse('https://api.example.com/upload'),
+          payload: form,
+          key: 'request-1',
+        )
+        ..logResponse(200, Uint8List(2048), key: 'request-1');
+
+      final log = output.join('\n');
+      expect(log, contains('avatar.png'));
+      expect(log, contains('"length": 3'));
+      expect(log, isNot(contains('hunter22')));
+      expect(log, contains('<binary: 2048 bytes>'));
+    });
+
+    test('logs the request as it was when sent', () {
+      final headers = <String, dynamic>{'X-Trace': 'before'};
+      logger.logRequest(
+        'GET',
+        Uri.parse('https://api.example.com/items'),
+        headers: headers,
+        key: 'request-1',
+      );
+      headers['X-Trace'] = 'after';
+      logger.logResponse(200, null, key: 'request-1');
+
+      final log = output.join('\n');
+      expect(log, contains('before'));
+      expect(log, isNot(contains('after')));
     });
 
     test('does not write or buffer output when disabled', () {

@@ -21,6 +21,7 @@ class HttpLoggerInterceptor extends Interceptor {
       headers: options.headers,
       payload: options.data,
       key: key,
+      startedAt: DateTime.now(),
     );
     handler.next(options);
   }
@@ -42,7 +43,8 @@ class HttpLoggerInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) {
     _logger.logResponse(
       err.response?.statusCode,
-      err.response?.data ?? {'error': err.message, 'type': err.type.name},
+      err.response?.data ??
+          <String, Object?>{'error': err.message, 'type': err.type.name},
       key: _requestKey(err.requestOptions),
     );
     handler.next(err);

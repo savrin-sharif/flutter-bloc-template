@@ -13,7 +13,10 @@ A deliberately small, production-minded Flutter starter using BLoC and clean arc
 - Optional two-language ARB/gen-l10n setup during project generation
 - `get_it` dependency composition in one place
 - Configurable environment values with `flutter_dotenv`
-- A configured Dio client and connectivity abstraction
+- A configured Dio client with an interceptor slot for authentication
+- Typed `Failure`s (connection, unauthorized, validation with field errors, not found, conflict, server) parsed from common REST error bodies
+- An app-wide `ConnectivityService` that confirms "offline" reports with a reachability probe and recovers when the server answers
+- A debug-only HTTP logger that redacts tokens, passwords, cookies, and API keys, including inside JSON strings and multipart fields
 - Material and Cupertino widget tests
 - Android, iOS, web, Windows, macOS, and Linux runners
 
@@ -67,7 +70,10 @@ Endpoint selection is build-safe:
 
 - Release builds always use `PROD_URL`, even if an `APP_ENV` override is supplied.
 - Debug and profile builds use `DEV_URL` by default.
-- Use the local server in a non-release build with `flutter run --dart-define=APP_ENV=local`.
+- Use the local server in a non-release build with `flutter run --dart-define=APP_ENV=local`, or comment out `DEV_URL` while `LOCAL_URL` is set.
+- Blank values (`DEV_URL=`) are treated as missing.
+
+Additional hosts, such as a socket server or CDN, follow the same rules through `AppConfig.environmentUrl('WS_URL')`, which reads `PROD_WS_URL`, `DEV_WS_URL`, or `LOCAL_WS_URL` and falls back to a shared `WS_URL`.
 
 On an Android emulator, `localhost` points to the emulator itself; set `LOCAL_URL` to `http://10.0.2.2:<port>` when the server runs on the host machine.
 
@@ -79,8 +85,9 @@ lib/
 ├── core/
 │   ├── config/                  # Environment-backed configuration
 │   ├── di/                      # Composition root
-│   ├── errors/                  # Shared failure types
-│   ├── network/                 # Dio and connectivity infrastructure
+│   ├── errors/                  # Typed failures
+│   ├── logging/                 # LoggerService and HTTP logger interceptor
+│   ├── network/                 # Dio, API error parsing, and connectivity
 │   ├── presentation/mixins/     # Reusable, UI-independent BLoC behavior
 │   ├── router/                  # Style-agnostic route graph
 │   └── theme/                   # Material and Cupertino themes
@@ -95,7 +102,9 @@ lib/
 
 Dependencies point inward: presentation uses domain; data implements domain contracts; domain does not import Flutter or infrastructure. `core/di/injection.dart` is the only place that assembles implementations.
 
-Feature BLoCs can use `AsyncControllerMixin` to run named operations with immutable loading snapshots, guaranteed cleanup, backend-message extraction, and connection-error classification. It intentionally does not show snack bars, validate forms, or own `TextEditingController`s; those remain UI responsibilities.
+Feature BLoCs can use `AsyncControllerMixin` to run named operations with immutable loading snapshots and guaranteed cleanup. Failures reach the BLoC as a `ControllerError` with a user-safe message, `isConnectionError`, per-field `fieldErrors`, the HTTP `statusCode`, and the typed `failure`. Repositories may throw a `Failure` directly; a raw `DioException` is converted with `Failure.fromDioException`. The mixin intentionally does not show snack bars, validate forms, or own `TextEditingController`s; those remain UI responsibilities.
+
+`ConnectivityService.isOnline` is a `ValueListenable<bool>` for offline banners and retry prompts. Every server response, including error statuses, marks the app as online.
 
 ## Add a feature
 
@@ -107,11 +116,11 @@ Feature BLoCs can use `AsyncControllerMixin` to run named operations with immuta
 
 Avoid creating a shared widget merely because a Flutter widget is used twice. Promote it only when it represents stable app-wide behavior or design language.
 
-## AI development prompt
+## AI agent instructions
 
-Import [`docs/AI_DEVELOPMENT_SUPER_PROMPT.md`](docs/AI_DEVELOPMENT_SUPER_PROMPT.md) into an AI coding model before requesting a feature or REST CRUD implementation. Append the real endpoint documentation and acceptance criteria to the prompt so the model follows the API contract instead of inventing request or response fields.
+[`AGENTS.md`](AGENTS.md) holds the architecture, API, UI, and testing rules for AI coding agents. Cursor, Codex, and other agents that support the `AGENTS.md` convention load it automatically; for other tools, paste it into the model first. Include the real endpoint documentation and acceptance criteria with each feature request so the agent follows the API contract instead of inventing request or response fields.
 
-The initializer stamps the generated copy of this prompt with the reviewed project name, app title, package identifier, Material/Cupertino selection, localization choice, target platforms, and Dart SDK constraint.
+The initializer stamps the generated `AGENTS.md` with the reviewed project name, app title, package identifier, Material/Cupertino selection, localization choice, target platforms, and Dart SDK constraint.
 
 ## Verify
 

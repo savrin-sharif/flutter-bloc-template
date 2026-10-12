@@ -1,5 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_bloc_template/core/errors/failure.dart';
 import 'package:flutter_bloc_template/features/welcome/domain/entities/welcome_info.dart';
 import 'package:flutter_bloc_template/features/welcome/domain/repositories/welcome_repository.dart';
 import 'package:flutter_bloc_template/features/welcome/domain/usecases/get_welcome_info.dart';
@@ -36,15 +37,17 @@ void main() {
   );
 
   blocTest<WelcomeBloc, WelcomeState>(
-    'uses the backend message and marks connection failures',
+    'uses the backend message for server failures',
     build: () => WelcomeBloc(
       GetWelcomeInfo(
         _Repository(
           () => throw DioException(
             requestOptions: RequestOptions(),
+            type: DioExceptionType.badResponse,
             response: Response<Map<String, Object?>>(
               requestOptions: RequestOptions(),
-              data: const {'message': 'Network connection unavailable'},
+              statusCode: 503,
+              data: const {'message': 'Maintenance in progress'},
             ),
           ),
         ),
@@ -58,7 +61,32 @@ void main() {
       ),
       WelcomeState(
         status: WelcomeStatus.failure,
-        errorMessage: 'Network connection unavailable',
+        errorMessage: 'Maintenance in progress',
+      ),
+    ],
+  );
+
+  blocTest<WelcomeBloc, WelcomeState>(
+    'marks unreachable servers as connection failures',
+    build: () => WelcomeBloc(
+      GetWelcomeInfo(
+        _Repository(
+          () => throw DioException(
+            requestOptions: RequestOptions(),
+            type: DioExceptionType.connectionError,
+          ),
+        ),
+      ),
+    ),
+    act: (bloc) => bloc.add(const WelcomeStarted()),
+    expect: () => const <WelcomeState>[
+      WelcomeState(
+        status: WelcomeStatus.loading,
+        activeOperations: {'load-welcome'},
+      ),
+      WelcomeState(
+        status: WelcomeStatus.failure,
+        errorMessage: Failure.connectionMessage,
         isConnectionError: true,
       ),
     ],

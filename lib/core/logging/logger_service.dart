@@ -25,7 +25,7 @@ class LoggerService {
 
   final bool enabled;
   final LogOutput _output;
-  final Map<Object, _RequestBuffer> _pending = {};
+  final Map<Object, _RequestBuffer> _pending = <Object, _RequestBuffer>{};
 
   static const _reset = '\x1B[0m';
   static const _bold = '\x1B[1m';
@@ -52,6 +52,8 @@ class LoggerService {
   static const _boxVertical = '│';
   static const _boxHorizontal = '─';
   static const _boxDashed = '┄';
+  static const _redacted = '<redacted>';
+  static const _maximumBodyLength = 4000;
 
   void debug(String message) => _log(_dim, '🐛', 'DEBUG', message);
 
@@ -73,31 +75,33 @@ class LoggerService {
   }
 
   /// Buffers an HTTP request until [logResponse] is called with the same key.
+  ///
+  /// Headers and payload are formatted immediately, so later mutation of the
+  /// request objects cannot change what is logged.
   void logRequest(
     String method,
     Uri uri, {
     Map<String, dynamic>? headers,
     Object? payload,
     required Object key,
+    DateTime? startedAt,
   }) {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
+
     _pending[key] = _RequestBuffer(
       method: method,
       uri: _sanitizeUri(uri),
-      headers: headers ?? const {},
-      payload: payload,
-      timestamp: DateTime.now(),
+      headers: _maskHeaders(headers ?? const <String, dynamic>{}),
+      formattedPayload: _formatPayload(payload),
+      timestamp: startedAt ?? DateTime.now(),
     );
   }
 
   /// Prints a buffered request and its response as one formatted block.
   void logResponse(int? statusCode, Object? data, {required Object key}) {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
 
+    final completedAt = DateTime.now();
     final buffer = _pending.remove(key);
     final code = statusCode ?? 0;
     final responseColor = switch (code) {
@@ -110,11 +114,11 @@ class LoggerService {
     final vertical = '$_bold$_white$_boxVertical$_reset';
     final lines = <String>[
       '$_bold$_white$_boxTopLeft${_boxHorizontal * _boxWidth}$_reset',
-      '$vertical  $_dim${_timestamp(buffer?.timestamp ?? DateTime.now())}$_reset',
+      '$vertical  $_dim${_timestamp(buffer?.timestamp ?? completedAt)}$_reset',
     ];
 
     if (buffer != null) {
-      final elapsed = DateTime.now().difference(buffer.timestamp);
+      final elapsed = completedAt.difference(buffer.timestamp);
       lines
         ..add('$_boxMiddleLeft$dashedBar')
         ..add('$vertical  $_bold$_brightBlue━━  REQUEST$_reset')
@@ -126,7 +130,7 @@ class LoggerService {
         ..add(vertical)
         ..add('$vertical  $_bold$_white📑  HEADERS$_reset');
 
-      final headers = _maskHeaders(buffer.headers);
+      final headers = buffer.headers;
       if (headers.isEmpty) {
         lines.add('$vertical     $_dim<empty>$_reset');
       } else {
@@ -138,7 +142,7 @@ class LoggerService {
       lines
         ..add(vertical)
         ..add('$vertical  $_bold$_white📦  BODY$_reset');
-      for (final line in _formatPayload(buffer.payload).split('\n')) {
+      for (final line in buffer.formattedPayload.split('\n')) {
         lines.add('$vertical     $_green$line$_reset');
       }
       lines.add('$vertical  $_dim⏱  ${elapsed.inMilliseconds} ms$_reset');
@@ -152,10 +156,9 @@ class LoggerService {
       )
       ..add(vertical);
 
-    final body = _formatJson(_sanitizeData(data));
-    const maximumBodyLength = 4000;
-    final clipped = body.length > maximumBodyLength;
-    final display = clipped ? body.substring(0, maximumBodyLength) : body;
+    final body = _formatJson(data);
+    final clipped = body.length > _maximumBodyLength;
+    final display = clipped ? body.substring(0, _maximumBodyLength) : body;
     lines.add('$vertical  $_bold$_white📄  BODY$_reset');
     for (final line in display.split('\n')) {
       lines.add('$vertical     ${_colorJsonLine(line)}');
@@ -175,9 +178,8 @@ class LoggerService {
   }
 
   void _log(String color, String emoji, String level, String message) {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
+
     final vertical = '$_bold$_white$_boxVertical$_reset';
     final lines = <String>[
       '$_bold$_white$_boxTopLeft${_boxHorizontal * _boxWidth}$_reset',
@@ -209,6 +211,7 @@ class LoggerService {
   };
 
   String _httpStatusText(int code) => switch (code) {
+    0 => 'Network Error',
     200 => 'OK',
     201 => 'Created',
     202 => 'Accepted',
@@ -220,111 +223,145 @@ class LoggerService {
     401 => 'Unauthorized',
     403 => 'Forbidden',
     404 => 'Not Found',
+    405 => 'Method Not Allowed',
+    408 => 'Request Timeout',
     409 => 'Conflict',
+    415 => 'Unsupported Media Type',
     422 => 'Unprocessable Entity',
     429 => 'Too Many Requests',
     500 => 'Internal Server Error',
+    501 => 'Not Implemented',
     502 => 'Bad Gateway',
     503 => 'Service Unavailable',
+    504 => 'Gateway Timeout',
     _ => '',
   };
 
-  Map<String, dynamic> _maskHeaders(Map<String, dynamic> headers) {
-    return headers.map((name, value) {
-      if (!_isSensitiveKey(name)) {
-        return MapEntry(name, value);
-      }
-      return MapEntry(name, _maskSecret(value.toString()));
-    });
+  Map<String, Object?> _maskHeaders(Map<String, dynamic> headers) {
+    return headers.map(
+      (name, value) => MapEntry(
+        name,
+        _isSensitiveKey(name)
+            ? _maskedHeaderValue(name, value.toString())
+            : value,
+      ),
+    );
   }
 
-  String _maskSecret(String value) {
-    final isBearer = value.toLowerCase().startsWith('bearer ');
-    final prefix = isBearer ? value.substring(0, 7) : '';
-    final secret = isBearer ? value.substring(7) : value;
-    if (secret.length <= 12) {
-      return '$prefix••••••';
-    }
+  /// Authorization keeps its scheme and a short fingerprint so different
+  /// tokens can be told apart; other secrets are fully redacted.
+  String _maskedHeaderValue(String name, String value) {
+    if (_normalizedKey(name) != 'authorization') return _redacted;
+
+    final separator = value.indexOf(' ');
+    final prefix = separator > 0 ? '${value.substring(0, separator)} ' : '';
+    final secret = separator > 0 ? value.substring(separator + 1) : value;
+    if (secret.length <= 12) return '$prefix••••••';
+
     return '$prefix${secret.substring(0, 6)}…'
         '${secret.substring(secret.length - 6)}';
   }
 
   String _formatPayload(Object? payload) {
-    if (payload == null) {
-      return '<empty>';
-    }
+    if (payload == null) return '<empty>';
+
     if (payload is FormData) {
-      final fields = {
-        for (final entry in payload.fields) entry.key: entry.value,
-      };
-      final files = payload.files
+      final fields = payload.fields
           .map(
-            (entry) => {
+            (entry) => <String, Object?>{
               'key': entry.key,
-              'filename': entry.value.filename,
-              'contentType': entry.value.contentType?.toString(),
+              'value': _isSensitiveKey(entry.key)
+                  ? _redacted
+                  : _sanitizeData(entry.value),
             },
           )
           .toList();
-      return _prettyEncode(_sanitizeData({'fields': fields, 'files': files}));
+      final files = payload.files
+          .map(
+            (entry) => <String, Object?>{
+              'key': entry.key,
+              'filename': entry.value.filename,
+              'contentType': entry.value.contentType?.toString(),
+              'length': entry.value.length,
+            },
+          )
+          .toList();
+      return _prettyEncode(<String, Object?>{'fields': fields, 'files': files});
     }
-    if (payload is Map || payload is List) {
-      return _prettyEncode(_sanitizeData(payload));
-    }
-    return payload.toString();
+    return _formatJson(payload);
   }
 
   String _formatJson(Object? data) {
-    if (data == null) {
-      return '<empty>';
+    if (data == null) return '<empty>';
+    if (data is Uint8List) return '<binary: ${data.length} bytes>';
+    if (data is String) {
+      final sanitized = _sanitizeData(data);
+      return sanitized is String ? sanitized : _prettyEncode(sanitized);
     }
-    if (data is Map || data is List) {
-      return _prettyEncode(data);
+    if (data is Map || data is Iterable) {
+      return _prettyEncode(_sanitizeData(data));
     }
-    return data.toString();
+    return _safeToString(data);
   }
 
   String _prettyEncode(Object? value) {
     try {
       return const JsonEncoder.withIndent('  ').convert(value);
-    } on JsonUnsupportedObjectError {
+    } on Object {
+      return _safeToString(value);
+    }
+  }
+
+  String _safeToString(Object? value) {
+    try {
       return value.toString();
+    } on Object {
+      return '<unprintable ${value.runtimeType}>';
     }
   }
 
   Uri _sanitizeUri(Uri uri) {
-    if (uri.queryParameters.isEmpty) {
-      return uri;
-    }
-    return uri.replace(
-      queryParameters: uri.queryParameters.map(
-        (name, value) =>
-            MapEntry(name, _isSensitiveKey(name) ? '<redacted>' : value),
-      ),
-    );
+    if (uri.queryParametersAll.isEmpty) return uri;
+
+    final parameters = <String, Object?>{};
+    uri.queryParametersAll.forEach((name, values) {
+      parameters[name] = _isSensitiveKey(name)
+          ? List<String>.filled(values.length, _redacted)
+          : values;
+    });
+    return uri.replace(queryParameters: parameters);
   }
 
   Object? _sanitizeData(Object? value) {
+    if (value is Uint8List) return '<binary: ${value.length} bytes>';
     if (value is Map) {
-      return Map<Object?, Object?>.fromEntries(
-        value.entries.map(
-          (entry) => MapEntry(
-            entry.key,
-            _isSensitiveKey(entry.key.toString())
-                ? '<redacted>'
-                : _sanitizeData(entry.value),
-          ),
-        ),
-      );
+      return <String, Object?>{
+        for (final entry in value.entries)
+          entry.key.toString(): _isSensitiveKey(entry.key.toString())
+              ? _redacted
+              : _sanitizeData(entry.value),
+      };
     }
-    if (value is List) {
+    if (value is Iterable) {
       return value.map(_sanitizeData).toList();
+    }
+    if (value is String) {
+      // JSON sent as a string must not bypass key-based redaction.
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map || decoded is List) return _sanitizeData(decoded);
+      } on FormatException {
+        // Ordinary string values need no structural sanitization.
+      }
     }
     return value;
   }
 
+  String _normalizedKey(String key) =>
+      key.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+
   bool _isSensitiveKey(String key) {
-    final normalized = key.toLowerCase().replaceAll(RegExp('[-_]'), '');
+    final normalized = _normalizedKey(key);
     if (const {'authorization', 'cookie', 'setcookie'}.contains(normalized)) {
       return true;
     }
@@ -392,13 +429,13 @@ class _RequestBuffer {
     required this.method,
     required this.uri,
     required this.headers,
-    required this.payload,
+    required this.formattedPayload,
     required this.timestamp,
   });
 
   final String method;
   final Uri uri;
-  final Map<String, dynamic> headers;
-  final Object? payload;
+  final Map<String, Object?> headers;
+  final String formattedPayload;
   final DateTime timestamp;
 }
