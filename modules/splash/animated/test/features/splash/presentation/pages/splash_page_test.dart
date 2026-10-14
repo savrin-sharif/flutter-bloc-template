@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc_template/core/router/app_router.dart';
 import 'package:flutter_bloc_template/core/theme/app_theme.dart';
 import 'package:flutter_bloc_template/features/splash/presentation/pages/splash_page.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +10,9 @@ import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
 
 const _animationDuration = Duration(milliseconds: 1500);
+const _splash = '/splash';
+const _next = '/next';
+const _home = '/home';
 
 void main() {
   // Loading inside a widget test's fake-async zone never completes, so the
@@ -35,7 +37,7 @@ void main() {
       expect(resolveCalls, 1);
 
       await tester.pump(_animationDuration - const Duration(milliseconds: 100));
-      expect(_location(router), AppRoutes.splash);
+      expect(_location(router), _splash);
 
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
@@ -48,7 +50,7 @@ void main() {
     ('returns null', () async => null),
     ('throws', () async => throw StateError('offline')),
   ]) {
-    testWidgets('lands on the playground when the resolver $description', (
+    testWidgets('lands on nextRoute when the resolver $description', (
       tester,
     ) async {
       final router = _splashRouter(resolver);
@@ -59,11 +61,11 @@ void main() {
       await tester.pump(_animationDuration);
       await tester.pumpAndSettle();
 
-      expect(find.text('playground'), findsOneWidget);
+      expect(find.text('next'), findsOneWidget);
     });
   }
 
-  testWidgets('lands on the playground without a resolver', (tester) async {
+  testWidgets('lands on nextRoute without a resolver', (tester) async {
     final router = _splashRouter(null);
     addTearDown(router.dispose);
 
@@ -72,7 +74,7 @@ void main() {
     await tester.pump(_animationDuration);
     await tester.pumpAndSettle();
 
-    expect(find.text('playground'), findsOneWidget);
+    expect(find.text('next'), findsOneWidget);
   });
 
   testWidgets('shows the logo and navigates when the animation fails', (
@@ -90,7 +92,7 @@ void main() {
     );
     await tester.pump();
     expect(find.byType(Image), findsOneWidget);
-    expect(_location(router), AppRoutes.splash);
+    expect(_location(router), _splash);
 
     await tester.pump(SplashPage.fallbackDelay);
     await tester.pumpAndSettle();
@@ -175,8 +177,6 @@ void main() {
   });
 }
 
-const _home = '/home';
-
 String _location(GoRouter router) =>
     router.routerDelegate.currentConfiguration.uri.path;
 
@@ -192,17 +192,14 @@ Widget _app(GoRouter router, {bool cupertino = false}) => cupertino
 
 GoRouter _splashRouter(Future<String?> Function()? resolveNextRoute) =>
     GoRouter(
-      initialLocation: AppRoutes.splash,
+      initialLocation: _splash,
       routes: [
         GoRoute(
-          path: AppRoutes.splash,
+          path: _splash,
           builder: (context, state) =>
-              SplashPage(resolveNextRoute: resolveNextRoute),
+              SplashPage(nextRoute: _next, resolveNextRoute: resolveNextRoute),
         ),
-        for (final (path, label) in [
-          (AppRoutes.playground, 'playground'),
-          (_home, 'home'),
-        ])
+        for (final (path, label) in [(_next, 'next'), (_home, 'home')])
           GoRoute(
             path: path,
             builder: (context, state) => Center(child: Text(label)),

@@ -461,8 +461,9 @@ behavior.
 - **Animated:** the native screen is color only. `/splash` is the router's
   `initialLocation`; `SplashPage` plays `assets/splash/splash_animation.json`
   once on the same color, then calls `context.go` with the result of
-  `resolveNextRoute` (the playground when it is absent, returns `null`, or
-  throws). `bootstrap()` prewarms the Lottie so its first frame is not blank.
+  `resolveNextRoute`, or `nextRoute` (the router's previous `initialLocation`)
+  when the resolver is absent, returns `null`, or throws. `bootstrap()`
+  prewarms the Lottie so its first frame is not blank.
   If the animation fails to load, `assets/splash/logo.png` shows for
   `SplashPage.fallbackDelay` before navigating.
 
@@ -492,10 +493,13 @@ Rules:
 - Widget tests must load the Lottie in `setUp` with
   `AssetLottie(SplashPage.animationAsset).load()`; loading inside the test's
   fake-async zone never completes.
-- To add a splash to a project generated with **None**, generate a throwaway
-  project with the desired mode and port its `native_splash.yaml`,
-  `assets/splash/`, `bootstrap.dart` changes, and (for Animated) the splash
-  feature, route, and tests.
+- To add a splash after generation (a **None** project, or one created before
+  splash support), run `scripts/add_splash.sh --style static|animated
+  --color '#RRGGBB'` from the project root; `--help` lists every option. It
+  copies `modules/splash` from the template (cloning it when no local checkout
+  is found), patches `pubspec.yaml`, `bootstrap.dart`, and the router, updates
+  this file, and reverts every change if a step fails. Do not hand-port the
+  splash when the script applies.
 
 ## Dependency injection and routing
 

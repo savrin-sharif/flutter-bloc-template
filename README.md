@@ -54,7 +54,7 @@ The splash prompt offers:
 2. **Static**: a native launch screen with a logo on a brand color, kept visible until startup finishes.
 3. **Animated**: a color-only native launch screen followed by a fullscreen Flutter `SplashPage` that plays a Lottie animation once, then navigates.
 
-Static and Animated ask for a splash color (default `#4054B2`, the theme seed), a dark-mode color, and an optional 960×960 logo PNG; a placeholder logo and animation are used otherwise. The generator writes `native_splash.yaml` and runs `flutter_native_splash` for the selected Android, iOS, and web targets. The splash sources live in `modules/splash/` and are copied only into projects that select them.
+Static and Animated ask for a splash color (default `#4054B2`, the theme seed), a dark-mode color, and an optional 960×960 logo PNG; a placeholder logo and animation are used otherwise. The generator writes `native_splash.yaml` and runs `flutter_native_splash` for the selected Android, iOS, and web targets. The splash sources live in `modules/splash/` and are copied only into projects that select them; `scripts/add_splash.sh` applies them, during generation or later.
 
 ## Run this template directly
 
@@ -124,6 +124,16 @@ Feature BLoCs can use `AsyncControllerMixin` to run named operations with immuta
 5. Test use cases/BLoCs without Flutter, then test both visual modes for adaptive pages.
 
 Avoid creating a shared widget merely because a Flutter widget is used twice. Promote it only when it represents stable app-wide behavior or design language.
+
+## Add a splash screen
+
+Projects generated without a splash, or before splash support existed, can add one from the project root:
+
+```sh
+scripts/add_splash.sh --style animated --color '#1F2A5C'
+```
+
+`--style static` shows a native logo on the color; `--style animated` adds a color-only native screen and a fullscreen Lottie `SplashPage` that hands off to the router's current initial route. `--dark-color` and `--logo` (a 960×960 PNG) are optional, and `--help` lists every option. The script patches `pubspec.yaml`, `bootstrap.dart`, the router, and `AGENTS.md`, generates the native launch screens, and reverts its edits if any step fails. The splash files come from a template checkout passed with `--template` or `FLUTTER_BLOC_TEMPLATE`; otherwise the script clones the template repository.
 
 ## AI agent instructions
 

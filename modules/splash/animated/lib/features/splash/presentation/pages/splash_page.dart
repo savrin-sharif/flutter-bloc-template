@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
 
-import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 
 /// Continues the native launch screen: plays [animationAsset] once on the
@@ -14,7 +13,7 @@ import '../../../../core/theme/app_theme.dart';
 /// Neither a Material nor a Cupertino scaffold, so it renders identically
 /// under both app roots.
 class SplashPage extends StatefulWidget {
-  const SplashPage({super.key, this.resolveNextRoute});
+  const SplashPage({required this.nextRoute, super.key, this.resolveNextRoute});
 
   static const animationAsset = 'assets/splash/splash_animation.json';
   static const fallbackImageAsset = 'assets/splash/logo.png';
@@ -30,8 +29,11 @@ class SplashPage extends StatefulWidget {
   /// Logical size of the native logo: a 960 px image rendered at 4x density.
   static const logoSize = 240.0;
 
-  /// Resolves the destination while the animation plays. A `null` result, an
-  /// error, or no resolver lands on [AppRoutes.playground].
+  /// Destination when [resolveNextRoute] is absent, returns `null`, or throws.
+  final String nextRoute;
+
+  /// Resolves the destination while the animation plays, for example from a
+  /// stored session.
   final Future<String?> Function()? resolveNextRoute;
 
   @override
@@ -86,7 +88,7 @@ class _SplashPageState extends State<SplashPage>
     _hasNavigated = true;
     final route = await _nextRoute;
     if (!mounted) return;
-    context.go(route ?? AppRoutes.playground);
+    context.go(route ?? widget.nextRoute);
   }
 
   @override

@@ -515,7 +515,7 @@ SPLASH_COLOR_DARK=''
 SPLASH_LOGO=''
 
 splash_summary() {
-  [[ "$SPLASH_STYLE" == none ]] && { printf 'None — add later'; return; }
+  [[ "$SPLASH_STYLE" == none ]] && { printf 'None — add later with scripts/add_splash.sh'; return; }
   local style='Static' logo='placeholder logo'
   [[ "$SPLASH_STYLE" == animated ]] && style='Animated'
   [[ -n "$SPLASH_LOGO" ]] && logo="$(basename "$SPLASH_LOGO")"
@@ -1082,124 +1082,14 @@ fi
 [[ -f "$PROJECT_NAME/analysis_options.yaml" ]] && \
   perl -i -ne 'print unless /^\s+- modules\/\*\*$/' "$PROJECT_NAME/analysis_options.yaml"
 
-# Replaces the first exact occurrence of $2 with $3 in $1, failing loudly when
-# the template no longer contains the anchor.
-splash_replace() {
-  local file="$1"
-  OLD="$2" NEW="$3" perl -0777 -i -pe \
-    '$n += s/\Q$ENV{OLD}\E/$ENV{NEW}/; END { exit($n ? 0 : 1) }' "$file" ||
-    die "Unable to apply the splash module to ${file#"$PROJECT_NAME/"}."
-}
-
-splash_platform_enabled() {
-  [[ ",$PLATFORMS," == *",$1,"* ]] && printf 'true' || printf 'false'
-}
-
-apply_splash_module() {
-  local module="$TEMPLATE_DIR/modules/splash" bootstrap="$PROJECT_NAME/lib/bootstrap.dart"
-  local pubspec="$PROJECT_NAME/pubspec.yaml" image_line='' android_12_image_line=''
-  [[ -d "$module" ]] || die 'The template is missing modules/splash.'
-
-  mkdir -p "$PROJECT_NAME/assets/splash"
-  cp "${SPLASH_LOGO:-$module/logo.png}" "$PROJECT_NAME/assets/splash/logo.png"
-
-  perl -0777 -i -pe 's/(  flutter_dotenv:[^\n]*\n)/$1  flutter_native_splash: ^2.4.8\n/' "$pubspec"
-  grep -q '^  flutter_native_splash:' "$pubspec" || die 'Unable to add flutter_native_splash to pubspec.yaml.'
-
-  splash_replace "$bootstrap" \
-    "import 'package:flutter_dotenv/flutter_dotenv.dart';"$'\n' \
-    "import 'package:flutter_dotenv/flutter_dotenv.dart';"$'\n'"import 'package:flutter_native_splash/flutter_native_splash.dart';"$'\n'
-  splash_replace "$bootstrap" \
-    '  WidgetsFlutterBinding.ensureInitialized();'$'\n' \
-    '  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();'$'\n''  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);'$'\n'
-  splash_replace "$bootstrap" \
-    '  runApp(const App());'$'\n' \
-    '  runApp(const App());'$'\n''  FlutterNativeSplash.remove();'$'\n'
-
-  if [[ "$SPLASH_STYLE" == static ]]; then
-    image_line=$'\n  image: assets/splash/logo.png'
-    android_12_image_line=$'\n    image: assets/splash/logo.png'
-  else
-    cp -R "$module/animated/." "$PROJECT_NAME/"
-
-    perl -0777 -i -pe 's/(  flutter_native_splash:[^\n]*\n)/$1  lottie: ^3.3.1\n/' "$pubspec"
-    grep -q '^  lottie:' "$pubspec" || die 'Unable to add lottie to pubspec.yaml.'
-    splash_replace "$pubspec" $'    - assets/envs/\n' $'    - assets/envs/\n    - assets/splash/\n'
-
-    splash_replace "$bootstrap" \
-      "import 'package:flutter_native_splash/flutter_native_splash.dart';"$'\n' \
-      "import 'package:flutter_native_splash/flutter_native_splash.dart';"$'\n'"import 'package:lottie/lottie.dart';"$'\n'
-    splash_replace "$bootstrap" \
-      "import 'core/network/connectivity_service.dart';"$'\n' \
-      "import 'core/network/connectivity_service.dart';"$'\n'"import 'features/splash/presentation/pages/splash_page.dart';"$'\n'
-    splash_replace "$bootstrap" \
-      "  await dotenv.load(fileName: 'assets/envs/.env');"$'\n' \
-      "  await Future.wait<void>([
-    dotenv.load(fileName: 'assets/envs/.env'),
-    _prewarmSplashAnimation(),
-  ]);
-"
-    cat >> "$bootstrap" <<'EOF'
-
-/// Fills the shared Lottie cache so [SplashPage] receives its decoded
-/// composition on its first frame instead of flashing an empty logo box.
-Future<void> _prewarmSplashAnimation() async {
-  try {
-    await AssetLottie(SplashPage.animationAsset).load();
-  } on Object {
-    // SplashPage loads the asset itself and owns the failure fallback.
-  }
-}
-EOF
-
-    local router="$PROJECT_NAME/lib/core/router/app_router.dart"
-    splash_replace "$router" \
-      "import '../../features/welcome/presentation/bloc/welcome_bloc.dart';"$'\n' \
-      "import '../../features/splash/presentation/pages/splash_page.dart';"$'\n'"import '../../features/welcome/presentation/bloc/welcome_bloc.dart';"$'\n'
-    splash_replace "$router" \
-      'abstract final class AppRoutes {'$'\n' \
-      'abstract final class AppRoutes {'$'\n'"  static const splash = '/splash';"$'\n'
-    splash_replace "$router" \
-      '  initialLocation: AppRoutes.playground,' \
-      '  initialLocation: AppRoutes.splash,'
-    splash_replace "$router" \
-      '  routes: ['$'\n' \
-      '  routes: [
-    GoRoute(
-      path: AppRoutes.splash,
-      builder: (context, state) => const SplashPage(),
-    ),
-'
-
-    local page="$PROJECT_NAME/lib/features/splash/presentation/pages/splash_page.dart"
-    splash_replace "$page" \
-      'static const backgroundColor = Color(0xFF4054B2);' \
-      "static const backgroundColor = Color(0xFF${SPLASH_COLOR#\#});"
-    splash_replace "$page" \
-      'static const darkBackgroundColor = Color(0xFF4054B2);' \
-      "static const darkBackgroundColor = Color(0xFF${SPLASH_COLOR_DARK#\#});"
-  fi
-
-  cat > "$PROJECT_NAME/native_splash.yaml" <<EOF
-# Native launch screen shown while Flutter starts. After editing, regenerate the
-# platform files with:
-#   dart run flutter_native_splash:create --path=native_splash.yaml
-flutter_native_splash:
-  color: "$SPLASH_COLOR"
-  color_dark: "$SPLASH_COLOR_DARK"$image_line
-  android: $(splash_platform_enabled android)
-  ios: $(splash_platform_enabled ios)
-  web: $(splash_platform_enabled web)
-  fullscreen: false
-  android_12:
-    color: "$SPLASH_COLOR"
-    color_dark: "$SPLASH_COLOR_DARK"$android_12_image_line
-EOF
-}
-
 GENERATE_NATIVE_SPLASH=false
 if [[ "$SPLASH_STYLE" != none ]]; then
-  apply_splash_module
+  SPLASH_ARGS=(
+    --project "$PROJECT_NAME" --template "$TEMPLATE_DIR" --style "$SPLASH_STYLE"
+    --color "$SPLASH_COLOR" --dark-color "$SPLASH_COLOR_DARK" --skip-pub --yes
+  )
+  [[ -n "$SPLASH_LOGO" ]] && SPLASH_ARGS+=(--logo "$SPLASH_LOGO")
+  run_step 'Adding the splash screen' "$TEMPLATE_DIR/scripts/add_splash.sh" "${SPLASH_ARGS[@]}"
   if [[ ",$PLATFORMS," =~ ,(android|ios|web), ]]; then
     GENERATE_NATIVE_SPLASH=true
   else
