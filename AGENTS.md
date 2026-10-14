@@ -384,6 +384,63 @@ add a transformer package unless needed; use the APIs already available first.
 - When both styles are supported by existing adaptive code, implement both.
 - Keep pages focused; extract only meaningful feature widgets.
 
+## Typography and fonts
+
+- Use the `google_fonts` package for custom font families. Do not add font
+  files under `assets/`, a `fonts:` section to `pubspec.yaml`, or `fontFamily`
+  strings that depend on bundled files. If `google_fonts` is not yet a
+  dependency, add it with `flutter pub add google_fonts`.
+- Use a custom family only when the request or design names one; otherwise
+  keep the platform default font. If a design clearly uses a custom font but
+  does not name it, ask once.
+- Apply the app-wide family once in `core/theme/app_theme.dart`, for every
+  theme the project generates:
+  - Material light: `textTheme: GoogleFonts.<family>TextTheme()`.
+  - Material dark: pass the dark base,
+    `GoogleFonts.<family>TextTheme(ThemeData(brightness: Brightness.dark).textTheme)`,
+    so text keeps dark-mode colors.
+  - Cupertino: `CupertinoTextThemeData(textStyle: GoogleFonts.<family>())`, and
+    wrap any other Cupertino styles the app relies on (navigation titles, large
+    titles, action text) with `GoogleFonts.<family>(textStyle: ...)` to keep
+    their native sizes. `AppTheme.cupertino` becomes `final` instead of `const`.
+- Widgets read styles from `Theme.of(context).textTheme` or
+  `CupertinoTheme.of(context).textTheme` and adjust size, weight, height, and
+  letter spacing with `copyWith`. Do not repeat the app font in individual
+  widgets; call `GoogleFonts.<family>()` in a widget only for an element that
+  uses a different family from the app font.
+- When a design sample provides text styles, implement its size, weight, line
+  height, letter spacing, and color exactly rather than adapting them to nearby
+  screens.
+- `google_fonts` downloads each font on first use and caches it on the device;
+  until then, text renders in the fallback font. Do not set
+  `GoogleFonts.config.allowRuntimeFetching = false`, because that requires
+  bundled font files.
+- macOS targets need the `com.apple.security.network.client` entitlement in
+  both `macos/Runner/DebugProfile.entitlements` and `Release.entitlements` for
+  fonts (and Dio requests) to download.
+- Widget tests run without network access. `google_fonts` logs the failed
+  download and falls back without failing the test; do not bundle fonts to
+  silence that log.
+
+```dart
+static final materialLight = ThemeData(
+  colorScheme: ColorScheme.fromSeed(seedColor: _seedColor),
+  useMaterial3: true,
+  textTheme: GoogleFonts.interTextTheme(),
+);
+
+static final materialDark = ThemeData(
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: _seedColor,
+    brightness: Brightness.dark,
+  ),
+  useMaterial3: true,
+  textTheme: GoogleFonts.interTextTheme(
+    ThemeData(brightness: Brightness.dark).textTheme,
+  ),
+);
+```
+
 ## Dependency injection and routing
 
 Register dependencies in `configureDependencies()` from the outside inward:
@@ -488,6 +545,8 @@ Before declaring completion, confirm:
 - [ ] Any required new shared widget has a focused API and appropriate tests.
 - [ ] DI and routes are complete.
 - [ ] Material/Cupertino and localization choices are preserved.
+- [ ] Custom fonts come from `google_fonts` through `AppTheme`; no font files
+      or `fonts:` entries were added.
 - [ ] Unrelated files and user changes are untouched.
 - [ ] Formatting, analysis, and tests pass.
 
