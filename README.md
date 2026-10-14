@@ -11,6 +11,7 @@ A deliberately small, production-minded Flutter starter using BLoC and clean arc
 - Native `Scaffold`/Material controls and `CupertinoPageScaffold`/Cupertino controls
 - Material/Cupertino design choice during project generation
 - Optional two-language ARB/gen-l10n setup during project generation
+- Optional static or Lottie-animated native splash screen during project generation
 - `get_it` dependency composition in one place
 - Configurable environment values with `flutter_dotenv`
 - A configured Dio client with an interceptor slot for authentication
@@ -30,7 +31,7 @@ From this repository, run:
 ./scripts/flutter-bloc-init.sh
 ```
 
-The initializer prompts for the project name, app title, production/development/local URLs, optional complete package identifier, design style, optional bilingual support, and target platforms. The package step can retain Flutter's generated `com.example.<project_name>` default or accept an exact reverse-domain identifier such as `app.rydr.drive`; the project name is not appended to a custom identifier. When bilingual support is selected, human-readable menus are shown for the primary and secondary languages; locale codes are assigned automatically. A custom-locale option supports additional languages and regional variants. The generator then creates ARB files and Flutter localization wiring, upgrades dependencies, and runs formatting, analysis, and tests.
+The initializer prompts for the project name, app title, production/development/local URLs, optional complete package identifier, design style, optional bilingual support, target platforms, and an optional splash screen. The package step can retain Flutter's generated `com.example.<project_name>` default or accept an exact reverse-domain identifier such as `app.rydr.drive`; the project name is not appended to a custom identifier. When bilingual support is selected, human-readable menus are shown for the primary and secondary languages; locale codes are assigned automatically. A custom-locale option supports additional languages and regional variants. The generator then creates ARB files and Flutter localization wiring, upgrades dependencies, and runs formatting, analysis, and tests.
 
 The entered app title is the single display-name source: it is written to `APP_NAME` and synchronized with the generated Android, iOS, macOS, web, Windows, and Linux metadata.
 
@@ -46,6 +47,14 @@ The design prompt offers:
 The choice is written to `APP_DESIGN_STYLE`; there is intentionally no runtime settings page or settings state dependency.
 
 If bilingual support is declined, no localization dependencies are installed. The app remains localization-ready through its centralized app root and presentation boundaries; follow `docs/ADDING_LOCALIZATION.md` to add it later.
+
+The splash prompt offers:
+
+1. **None** (default): the platform launch screen; no splash dependencies.
+2. **Static**: a native launch screen with a logo on a brand color, kept visible until startup finishes.
+3. **Animated**: a color-only native launch screen followed by a fullscreen Flutter `SplashPage` that plays a Lottie animation once, then navigates.
+
+Static and Animated ask for a splash color (default `#4054B2`, the theme seed), a dark-mode color, and an optional 960×960 logo PNG; a placeholder logo and animation are used otherwise. The generator writes `native_splash.yaml` and runs `flutter_native_splash` for the selected Android, iOS, and web targets. The splash sources live in `modules/splash/` and are copied only into projects that select them.
 
 ## Run this template directly
 
@@ -120,7 +129,7 @@ Avoid creating a shared widget merely because a Flutter widget is used twice. Pr
 
 [`AGENTS.md`](AGENTS.md) holds the architecture, API, UI, and testing rules for AI coding agents. Cursor, Codex, and other agents that support the `AGENTS.md` convention load it automatically; for other tools, paste it into the model first. Include the real endpoint documentation and acceptance criteria with each feature request so the agent follows the API contract instead of inventing request or response fields.
 
-The initializer stamps the generated `AGENTS.md` with the reviewed project name, app title, package identifier, Material/Cupertino selection, localization choice, target platforms, and Dart SDK constraint.
+The initializer stamps the generated `AGENTS.md` with the reviewed project name, app title, package identifier, Material/Cupertino selection, localization choice, target platforms, splash screen mode, and Dart SDK constraint.
 
 ## Verify
 

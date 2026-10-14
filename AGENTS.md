@@ -25,6 +25,7 @@ you have access to its files.
 | Design language | {{DESIGN_STYLE}} |
 | Localization | {{LOCALIZATION}} |
 | Target platforms | {{PLATFORMS}} |
+| Splash screen | {{SPLASH_SCREEN}} |
 | Dart SDK constraint | ^{{DART_SDK_VERSION}} |
 
 If this profile still contains `{{PLACEHOLDERS}}`, the document is the source
@@ -443,6 +444,58 @@ static final materialDark = ThemeData(
   ),
 );
 ```
+
+## Splash screen
+
+The profile's "Splash screen" row records the generated mode. Identify it from
+`native_splash.yaml` and `lib/features/splash/` before changing launch
+behavior.
+
+- **None:** there is no `native_splash.yaml` and no `flutter_native_splash`
+  dependency. The platform default launch screen shows.
+- **Static:** `native_splash.yaml` sets `color`, `color_dark`, and
+  `image: assets/splash/logo.png` (also under `android_12:`). `bootstrap()`
+  calls `FlutterNativeSplash.preserve()` before async startup and `remove()`
+  after `runApp`, so the native screen covers environment loading and
+  dependency setup. There is no Flutter splash route.
+- **Animated:** the native screen is color only. `/splash` is the router's
+  `initialLocation`; `SplashPage` plays `assets/splash/splash_animation.json`
+  once on the same color, then calls `context.go` with the result of
+  `resolveNextRoute` (the playground when it is absent, returns `null`, or
+  throws). `bootstrap()` prewarms the Lottie so its first frame is not blank.
+  If the animation fails to load, `assets/splash/logo.png` shows for
+  `SplashPage.fallbackDelay` before navigating.
+
+Rules:
+
+- Change native splash colors and images only in `native_splash.yaml`, then
+  run `dart run flutter_native_splash:create --path=native_splash.yaml`. Never
+  hand-edit the generated Android drawables, iOS launch storyboard/images, or
+  web splash files.
+- Keep `color`/`color_dark` in `native_splash.yaml` equal to
+  `SplashPage.backgroundColor`/`darkBackgroundColor`. `SplashPage` follows the
+  platform brightness, as the native screen does, not the app theme.
+- `flutter_native_splash` stays in `dependencies`, not `dev_dependencies`,
+  because `preserve`/`remove` run in the app.
+- Splash logos are 960×960 PNGs with the artwork inside the central 640 px
+  circle, which Android 12+ crops to. At 4x density this is 240 logical
+  pixels; `SplashPage.logoSize` matches it so the hand-off does not jump.
+- Replace `splash_animation.json` with the product animation; its
+  transparent background shows the splash color. The page plays it for the
+  composition's own duration.
+- `SplashPage` enters `SystemUiMode.immersiveSticky` and restores
+  `SystemUiMode.edgeToEdge` on dispose. Its `AnnotatedRegion` sets icon
+  contrast for the splash color; the app root's region takes over afterwards.
+- Resolve launch decisions (for example, a stored session) by passing
+  `resolveNextRoute` from the router. Do not block `bootstrap()` on network
+  calls to choose a route.
+- Widget tests must load the Lottie in `setUp` with
+  `AssetLottie(SplashPage.animationAsset).load()`; loading inside the test's
+  fake-async zone never completes.
+- To add a splash to a project generated with **None**, generate a throwaway
+  project with the desired mode and port its `native_splash.yaml`,
+  `assets/splash/`, `bootstrap.dart` changes, and (for Animated) the splash
+  feature, route, and tests.
 
 ## Dependency injection and routing
 

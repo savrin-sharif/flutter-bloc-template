@@ -34,7 +34,9 @@ warning() {
   fi
 }
 
-restore_terminal() { [[ "$MODERN_UI" == true ]] && printf '%b%b' "$SHOW_CURSOR" "$DEFAULT_CURSOR"; }
+restore_terminal() {
+  if [[ "$MODERN_UI" == true ]]; then printf '%b%b' "$SHOW_CURSOR" "$DEFAULT_CURSOR"; fi
+}
 exit_program() {
   restore_terminal
   printf '\nInitializer closed.\n'
@@ -323,7 +325,7 @@ apply_native_app_name() {
 
 render_completed_sections() {
   case "$CURRENT_SECTION_NUMBER" in
-    02|03|04|05)
+    02|03|04|05|06)
       printf '        %b01%b  %bProject details%b  %s  •  %s\n' \
         "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" "$PROJECT_NAME" "$APP_TITLE"
       printf '            %bPROD%b %s  %bDEV%b %s  %bLOCAL%b %s\n\n' \
@@ -332,7 +334,7 @@ render_completed_sections() {
   esac
 
   case "$CURRENT_SECTION_NUMBER" in
-    03|04|05)
+    03|04|05|06)
       printf '        %b02%b  %bApp package%b      %s\n\n' \
         "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" \
         "$(package_identifier)"
@@ -340,16 +342,23 @@ render_completed_sections() {
   esac
 
   case "$CURRENT_SECTION_NUMBER" in
-    04|05)
+    04|05|06)
       printf '        %b03%b  %bDesign language%b  %s\n\n' \
         "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" "$DESIGN_STYLE"
       ;;
   esac
 
-  if [[ "$CURRENT_SECTION_NUMBER" == 05 ]]; then
-    printf '        %b04%b  %bLanguage support%b %s\n\n' \
-      "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" \
-      "$([[ "$ENABLE_BILINGUAL" == true ]] && printf '%s + %s' "$PRIMARY_LOCALE" "$SECONDARY_LOCALE" || printf 'Add later')"
+  case "$CURRENT_SECTION_NUMBER" in
+    05|06)
+      printf '        %b04%b  %bLanguage support%b %s\n\n' \
+        "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" \
+        "$([[ "$ENABLE_BILINGUAL" == true ]] && printf '%s + %s' "$PRIMARY_LOCALE" "$SECONDARY_LOCALE" || printf 'Add later')"
+      ;;
+  esac
+
+  if [[ "$CURRENT_SECTION_NUMBER" == 06 ]]; then
+    printf '        %b05%b  %bTarget platforms%b %s\n\n' \
+      "$PURPLE$BOLD" "$RESET" "$MUTED" "$RESET" "$PLATFORMS"
   fi
 }
 
@@ -493,6 +502,135 @@ edit_language_support() {
   fi
 }
 
+edit_target_platforms() {
+  render_compact_screen 'Edit target platforms'
+  select_platforms
+  PLATFORMS="$SELECTED_PLATFORMS"
+}
+
+DEFAULT_SPLASH_COLOR='#4054B2'
+SPLASH_STYLE=none
+SPLASH_COLOR="$DEFAULT_SPLASH_COLOR"
+SPLASH_COLOR_DARK=''
+SPLASH_LOGO=''
+
+splash_summary() {
+  [[ "$SPLASH_STYLE" == none ]] && { printf 'None — add later'; return; }
+  local style='Static' logo='placeholder logo'
+  [[ "$SPLASH_STYLE" == animated ]] && style='Animated'
+  [[ -n "$SPLASH_LOGO" ]] && logo="$(basename "$SPLASH_LOGO")"
+  printf '%s — %s, dark %s, %s' "$style" "$SPLASH_COLOR" "$SPLASH_COLOR_DARK" "$logo"
+}
+
+# Prompts for a #RRGGBB color into HEX_COLOR; returns 1 when the user goes back.
+read_hex_color() {
+  local label="$1" default="$2" value
+  while true; do
+    if [[ "$MODERN_UI" == true ]]; then
+      read_input "$label [$default]:"
+      [[ "$INPUT_ACTION" == back ]] && return 1
+      value="${INPUT_VALUE:-$default}"
+    else
+      read -r -p "$label [$default] (or back/exit): " value
+      exit_if_requested "$value"
+      [[ "$value" == back ]] && return 1
+      value="${value:-$default}"
+    fi
+    [[ "$value" == \#* ]] || value="#$value"
+    if [[ "$value" =~ ^#[0-9A-Fa-f]{6}$ ]]; then
+      HEX_COLOR="$(printf '%s' "$value" | tr '[:lower:]' '[:upper:]')"
+      return 0
+    fi
+    warning 'Use a six-digit hex color such as #4054B2. Please retry.'
+  done
+}
+
+# Prompts for an optional PNG logo into LOGO_PATH; returns 1 when the user goes back.
+read_splash_logo() {
+  local value
+  while true; do
+    if [[ "$MODERN_UI" == true ]]; then
+      read_input 'Logo PNG path [placeholder]:' "$SPLASH_LOGO"
+      [[ "$INPUT_ACTION" == back ]] && return 1
+      value="$INPUT_VALUE"
+    else
+      read -r -p 'Logo PNG path [placeholder] (or back/exit): ' value
+      exit_if_requested "$value"
+      [[ "$value" == back ]] && return 1
+    fi
+    if [[ -z "$value" ]]; then
+      LOGO_PATH=''
+      return 0
+    fi
+    value="${value/#\~/$HOME}"
+    if [[ -f "$value" && ( "$value" == *.png || "$value" == *.PNG ) ]]; then
+      LOGO_PATH="$(cd "$(dirname "$value")" && pwd)/$(basename "$value")"
+      return 0
+    fi
+    warning 'Enter an existing .png file, or leave empty for the placeholder logo.'
+  done
+}
+
+# $1 is "flow" during first-time setup or "review" from the review screen.
+configure_splash() {
+  local context="$1" choice style
+  while true; do
+    if [[ "$MODERN_UI" == true ]]; then
+      if [[ "$context" == review ]]; then
+        render_compact_screen 'Edit splash screen'
+        printf '        %bThe native splash shows while Flutter starts.%b\n\n' "$MUTED" "$RESET"
+      else
+        printf '        %bUse ↑/↓ and Enter%b\n\n' "$MUTED" "$RESET"
+      fi
+      local back_label='← Edit previous configuration'
+      [[ "$context" == review ]] && back_label='← Back to review'
+      select_one \
+        'None — add a splash later' \
+        'Static — native logo on a brand color' \
+        'Animated — native color, then a Lottie splash page' \
+        "$back_label" \
+        'Exit initializer'
+      choice="$SELECTED_INDEX"
+      if [[ "$choice" -eq 3 ]]; then
+        [[ "$context" == review ]] && return
+        edit_previous_configuration
+        continue
+      fi
+      [[ "$choice" -eq 4 ]] && exit_program
+    else
+      read -r -p 'Splash screen [none/static/animated/back/exit]: ' choice
+      exit_if_requested "$choice"
+      if [[ "$choice" == back || "$choice" == b ]]; then
+        [[ "$context" == review ]] && return
+        edit_project_details
+        continue
+      fi
+      case "${choice:-none}" in
+        none) choice=0 ;;
+        static) choice=1 ;;
+        animated) choice=2 ;;
+        *) warning 'Choose none, static, or animated.'; continue ;;
+      esac
+    fi
+
+    case "$choice" in
+      0) SPLASH_STYLE=none; return ;;
+      1) style=static ;;
+      2) style=animated ;;
+    esac
+    read_hex_color 'Splash color' "$SPLASH_COLOR" || continue
+    local light="$HEX_COLOR"
+    read_hex_color 'Dark mode splash color' "${SPLASH_COLOR_DARK:-$light}" || continue
+    local dark="$HEX_COLOR"
+    read_splash_logo || continue
+    SPLASH_STYLE="$style"
+    SPLASH_COLOR="$light"
+    SPLASH_COLOR_DARK="$dark"
+    SPLASH_LOGO="$LOGO_PATH"
+    return
+  done
+}
+
 edit_previous_configuration() {
   local choice
   while true; do
@@ -516,6 +654,12 @@ edit_previous_configuration() {
         [[ "$choice" -eq 4 ]] && break
         [[ "$choice" -eq 5 ]] && exit_program
         ;;
+      06)
+        select_one '01 — Project details and URLs' '02 — App package' '03 — Design language' '04 — Language support' '05 — Target platforms' '← Return to current step' 'Exit initializer'
+        choice="$SELECTED_INDEX"
+        [[ "$choice" -eq 5 ]] && break
+        [[ "$choice" -eq 6 ]] && exit_program
+        ;;
       *) edit_project_details; return ;;
     esac
     case "$choice" in
@@ -523,6 +667,7 @@ edit_previous_configuration() {
       1) edit_app_package ;;
       2) edit_design_language ;;
       3) edit_language_support ;;
+      4) edit_target_platforms ;;
     esac
   done
   restore_current_section
@@ -573,7 +718,7 @@ run_step() {
 review_configuration() {
   local action
   while true; do
-    CURRENT_SECTION_NUMBER='06'
+    CURRENT_SECTION_NUMBER='07'
     CURRENT_SECTION_TITLE='Review and edit your configuration'
     if [[ "$MODERN_UI" == true ]]; then
       render_compact_screen 'Review configuration'
@@ -589,7 +734,8 @@ review_configuration() {
       else
         printf '        %bLanguages%b     Add later\n' "$MUTED" "$RESET"
       fi
-      printf '        %bPlatforms%b     %s\n\n' "$MUTED" "$RESET" "$PLATFORMS"
+      printf '        %bPlatforms%b     %s\n' "$MUTED" "$RESET" "$PLATFORMS"
+      printf '        %bSplash%b        %s\n\n' "$MUTED" "$RESET" "$(splash_summary)"
       printf '        %bSelect an item to continue or go back and edit:%b\n\n' "$MUTED" "$RESET"
       select_one \
         'Create project with these settings' \
@@ -598,17 +744,18 @@ review_configuration() {
         '← Edit design language' \
         '← Edit language support' \
         '← Edit target platforms' \
+        '← Edit splash screen' \
         'Exit initializer'
       action="$SELECTED_INDEX"
     else
-      printf 'Project: %s\nPackage: %s\nDesign: %s\nPlatforms: %s\n' \
+      printf 'Project: %s\nPackage: %s\nDesign: %s\nPlatforms: %s\nSplash: %s\n' \
         "$PROJECT_NAME" \
         "$(package_identifier)" \
-        "$DESIGN_STYLE" "$PLATFORMS"
-      printf '\n  1) Create project\n  2) Edit project details and URLs\n  3) Edit app package\n  4) Edit design language\n  5) Edit language support\n  6) Edit target platforms\n  0) Exit\n'
+        "$DESIGN_STYLE" "$PLATFORMS" "$(splash_summary)"
+      printf '\n  1) Create project\n  2) Edit project details and URLs\n  3) Edit app package\n  4) Edit design language\n  5) Edit language support\n  6) Edit target platforms\n  7) Edit splash screen\n  0) Exit\n'
       read -r -p 'Selection: ' action
       [[ "$action" == 0 ]] && exit_program
-      [[ "$action" =~ ^[1-6]$ ]] || { warning 'Invalid selection. Please retry.'; continue; }
+      [[ "$action" =~ ^[1-7]$ ]] || { warning 'Invalid selection. Please retry.'; continue; }
       action=$((action - 1))
     fi
 
@@ -668,15 +815,15 @@ review_configuration() {
         ;;
       5)
         if [[ "$MODERN_UI" == true ]]; then
-          render_compact_screen 'Edit target platforms'
-          select_platforms; PLATFORMS="$SELECTED_PLATFORMS"
+          edit_target_platforms
         else
           read -r -p "Platforms [$PLATFORMS] or back: " value
           [[ "$value" == back ]] && continue
           [[ -n "$value" ]] && PLATFORMS="$value"
         fi
         ;;
-      6) exit_program ;;
+      6) configure_splash review ;;
+      7) exit_program ;;
     esac
   done
 }
@@ -872,6 +1019,11 @@ else
   done
 fi
 
+CURRENT_SECTION_NUMBER='06'
+CURRENT_SECTION_TITLE='Choose a splash screen'
+section "$CURRENT_SECTION_NUMBER" "$CURRENT_SECTION_TITLE"
+configure_splash flow
+
 review_configuration
 
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flutter-bloc-init.XXXXXX")"
@@ -888,7 +1040,7 @@ else
   run_step 'Downloading template' git clone --depth 1 --branch "$TEMPLATE_BRANCH" "$TEMPLATE_REPO" "$TEMPLATE_DIR"
 fi
 
-section '07' 'Building your playground'
+section '08' 'Building your playground'
 CREATE_ARGS=(create --platforms="$PLATFORMS" --project-name="$PROJECT_NAME")
 run_step 'Creating Flutter project' flutter "${CREATE_ARGS[@]}" "$PROJECT_NAME"
 apply_native_app_name "$PROJECT_NAME"
@@ -927,6 +1079,134 @@ if [[ -d "$TEMPLATE_DIR/scripts" ]]; then
   )
 fi
 
+[[ -f "$PROJECT_NAME/analysis_options.yaml" ]] && \
+  perl -i -ne 'print unless /^\s+- modules\/\*\*$/' "$PROJECT_NAME/analysis_options.yaml"
+
+# Replaces the first exact occurrence of $2 with $3 in $1, failing loudly when
+# the template no longer contains the anchor.
+splash_replace() {
+  local file="$1"
+  OLD="$2" NEW="$3" perl -0777 -i -pe \
+    '$n += s/\Q$ENV{OLD}\E/$ENV{NEW}/; END { exit($n ? 0 : 1) }' "$file" ||
+    die "Unable to apply the splash module to ${file#"$PROJECT_NAME/"}."
+}
+
+splash_platform_enabled() {
+  [[ ",$PLATFORMS," == *",$1,"* ]] && printf 'true' || printf 'false'
+}
+
+apply_splash_module() {
+  local module="$TEMPLATE_DIR/modules/splash" bootstrap="$PROJECT_NAME/lib/bootstrap.dart"
+  local pubspec="$PROJECT_NAME/pubspec.yaml" image_line='' android_12_image_line=''
+  [[ -d "$module" ]] || die 'The template is missing modules/splash.'
+
+  mkdir -p "$PROJECT_NAME/assets/splash"
+  cp "${SPLASH_LOGO:-$module/logo.png}" "$PROJECT_NAME/assets/splash/logo.png"
+
+  perl -0777 -i -pe 's/(  flutter_dotenv:[^\n]*\n)/$1  flutter_native_splash: ^2.4.8\n/' "$pubspec"
+  grep -q '^  flutter_native_splash:' "$pubspec" || die 'Unable to add flutter_native_splash to pubspec.yaml.'
+
+  splash_replace "$bootstrap" \
+    "import 'package:flutter_dotenv/flutter_dotenv.dart';"$'\n' \
+    "import 'package:flutter_dotenv/flutter_dotenv.dart';"$'\n'"import 'package:flutter_native_splash/flutter_native_splash.dart';"$'\n'
+  splash_replace "$bootstrap" \
+    '  WidgetsFlutterBinding.ensureInitialized();'$'\n' \
+    '  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();'$'\n''  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);'$'\n'
+  splash_replace "$bootstrap" \
+    '  runApp(const App());'$'\n' \
+    '  runApp(const App());'$'\n''  FlutterNativeSplash.remove();'$'\n'
+
+  if [[ "$SPLASH_STYLE" == static ]]; then
+    image_line=$'\n  image: assets/splash/logo.png'
+    android_12_image_line=$'\n    image: assets/splash/logo.png'
+  else
+    cp -R "$module/animated/." "$PROJECT_NAME/"
+
+    perl -0777 -i -pe 's/(  flutter_native_splash:[^\n]*\n)/$1  lottie: ^3.3.1\n/' "$pubspec"
+    grep -q '^  lottie:' "$pubspec" || die 'Unable to add lottie to pubspec.yaml.'
+    splash_replace "$pubspec" $'    - assets/envs/\n' $'    - assets/envs/\n    - assets/splash/\n'
+
+    splash_replace "$bootstrap" \
+      "import 'package:flutter_native_splash/flutter_native_splash.dart';"$'\n' \
+      "import 'package:flutter_native_splash/flutter_native_splash.dart';"$'\n'"import 'package:lottie/lottie.dart';"$'\n'
+    splash_replace "$bootstrap" \
+      "import 'core/network/connectivity_service.dart';"$'\n' \
+      "import 'core/network/connectivity_service.dart';"$'\n'"import 'features/splash/presentation/pages/splash_page.dart';"$'\n'
+    splash_replace "$bootstrap" \
+      "  await dotenv.load(fileName: 'assets/envs/.env');"$'\n' \
+      "  await Future.wait<void>([
+    dotenv.load(fileName: 'assets/envs/.env'),
+    _prewarmSplashAnimation(),
+  ]);
+"
+    cat >> "$bootstrap" <<'EOF'
+
+/// Fills the shared Lottie cache so [SplashPage] receives its decoded
+/// composition on its first frame instead of flashing an empty logo box.
+Future<void> _prewarmSplashAnimation() async {
+  try {
+    await AssetLottie(SplashPage.animationAsset).load();
+  } on Object {
+    // SplashPage loads the asset itself and owns the failure fallback.
+  }
+}
+EOF
+
+    local router="$PROJECT_NAME/lib/core/router/app_router.dart"
+    splash_replace "$router" \
+      "import '../../features/welcome/presentation/bloc/welcome_bloc.dart';"$'\n' \
+      "import '../../features/splash/presentation/pages/splash_page.dart';"$'\n'"import '../../features/welcome/presentation/bloc/welcome_bloc.dart';"$'\n'
+    splash_replace "$router" \
+      'abstract final class AppRoutes {'$'\n' \
+      'abstract final class AppRoutes {'$'\n'"  static const splash = '/splash';"$'\n'
+    splash_replace "$router" \
+      '  initialLocation: AppRoutes.playground,' \
+      '  initialLocation: AppRoutes.splash,'
+    splash_replace "$router" \
+      '  routes: ['$'\n' \
+      '  routes: [
+    GoRoute(
+      path: AppRoutes.splash,
+      builder: (context, state) => const SplashPage(),
+    ),
+'
+
+    local page="$PROJECT_NAME/lib/features/splash/presentation/pages/splash_page.dart"
+    splash_replace "$page" \
+      'static const backgroundColor = Color(0xFF4054B2);' \
+      "static const backgroundColor = Color(0xFF${SPLASH_COLOR#\#});"
+    splash_replace "$page" \
+      'static const darkBackgroundColor = Color(0xFF4054B2);' \
+      "static const darkBackgroundColor = Color(0xFF${SPLASH_COLOR_DARK#\#});"
+  fi
+
+  cat > "$PROJECT_NAME/native_splash.yaml" <<EOF
+# Native launch screen shown while Flutter starts. After editing, regenerate the
+# platform files with:
+#   dart run flutter_native_splash:create --path=native_splash.yaml
+flutter_native_splash:
+  color: "$SPLASH_COLOR"
+  color_dark: "$SPLASH_COLOR_DARK"$image_line
+  android: $(splash_platform_enabled android)
+  ios: $(splash_platform_enabled ios)
+  web: $(splash_platform_enabled web)
+  fullscreen: false
+  android_12:
+    color: "$SPLASH_COLOR"
+    color_dark: "$SPLASH_COLOR_DARK"$android_12_image_line
+EOF
+}
+
+GENERATE_NATIVE_SPLASH=false
+if [[ "$SPLASH_STYLE" != none ]]; then
+  apply_splash_module
+  if [[ ",$PLATFORMS," =~ ,(android|ios|web), ]]; then
+    GENERATE_NATIVE_SPLASH=true
+  else
+    warning 'No Android, iOS, or Web target selected; native_splash.yaml was written but not applied.'
+  fi
+fi
+
 if [[ -f "$PROJECT_NAME/README.md" ]]; then
   perl -0777 -i -pe \
     's/\n## Generate a project\n.*?(?=\n## Run this template directly)/\n/s; s/^## Run this template directly$/## Run the project/m' \
@@ -952,9 +1232,10 @@ if [[ -f "$PROMPT_PATH" ]]; then
   PROFILE_DESIGN="$(markdown_escape "$DESIGN_PROFILE")" \
   PROFILE_LOCALIZATION="$(markdown_escape "$LOCALIZATION_PROFILE")" \
   PROFILE_PLATFORMS="$(markdown_escape "$PLATFORMS")" \
+  PROFILE_SPLASH="$(markdown_escape "$(splash_summary)")" \
   PROFILE_DART_SDK="$DART_SDK_VERSION" \
     perl -i -pe \
-      's/\{\{PROJECT_NAME\}\}/$ENV{PROFILE_PROJECT_NAME}/g; s/\{\{APP_TITLE\}\}/$ENV{PROFILE_APP_TITLE}/g; s/\{\{PACKAGE_IDENTIFIER\}\}/$ENV{PROFILE_PACKAGE}/g; s/\{\{DESIGN_STYLE\}\}/$ENV{PROFILE_DESIGN}/g; s/\{\{LOCALIZATION\}\}/$ENV{PROFILE_LOCALIZATION}/g; s/\{\{PLATFORMS\}\}/$ENV{PROFILE_PLATFORMS}/g; s/\{\{DART_SDK_VERSION\}\}/$ENV{PROFILE_DART_SDK}/g' \
+      's/\{\{PROJECT_NAME\}\}/$ENV{PROFILE_PROJECT_NAME}/g; s/\{\{APP_TITLE\}\}/$ENV{PROFILE_APP_TITLE}/g; s/\{\{PACKAGE_IDENTIFIER\}\}/$ENV{PROFILE_PACKAGE}/g; s/\{\{DESIGN_STYLE\}\}/$ENV{PROFILE_DESIGN}/g; s/\{\{LOCALIZATION\}\}/$ENV{PROFILE_LOCALIZATION}/g; s/\{\{PLATFORMS\}\}/$ENV{PROFILE_PLATFORMS}/g; s/\{\{SPLASH_SCREEN\}\}/$ENV{PROFILE_SPLASH}/g; s/\{\{DART_SDK_VERSION\}\}/$ENV{PROFILE_DART_SDK}/g' \
       "$PROMPT_PATH"
 
   grep -q '{{DESIGN_STYLE}}' "$PROMPT_PATH" && \
@@ -1071,6 +1352,9 @@ finalize_project() {
   cd "$PROJECT_NAME"
   flutter pub upgrade --major-versions
   if [[ "$ENABLE_BILINGUAL" == true ]]; then flutter gen-l10n; fi
+  if [[ "$GENERATE_NATIVE_SPLASH" == true ]]; then
+    dart run flutter_native_splash:create --path=native_splash.yaml
+  fi
   dart format lib test
   flutter analyze
   flutter test
@@ -1087,9 +1371,14 @@ else
   printf '\nCreated %s successfully.\nDesign style: %s' "$PROJECT_NAME" "$DESIGN_STYLE"
 fi
 if [[ "$ENABLE_BILINGUAL" == true ]]; then
-  printf '  •  %s + %s\n' "$PRIMARY_LOCALE" "$SECONDARY_LOCALE"
+  printf '  •  %s + %s' "$PRIMARY_LOCALE" "$SECONDARY_LOCALE"
 else
-  printf '  •  localization-ready\n'
+  printf '  •  localization-ready'
+fi
+if [[ "$SPLASH_STYLE" != none ]]; then
+  printf '  •  %s splash\n' "$SPLASH_STYLE"
+else
+  printf '\n'
 fi
 if [[ "$MODERN_UI" == true ]]; then
   printf '        %bNext:%b cd %s && flutter run\n\n' "$MUTED" "$RESET" "$PROJECT_NAME"
