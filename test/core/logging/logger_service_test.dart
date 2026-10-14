@@ -52,6 +52,24 @@ void main() {
       expect(log, isNot(contains('query-secret')));
     });
 
+    test('writes each message and HTTP exchange as a single block', () {
+      logger
+        ..info('first line\nsecond line')
+        ..logRequest(
+          'GET',
+          Uri.parse('https://api.example.com/items'),
+          key: 'request-1',
+        )
+        ..logResponse(200, const {'ok': true}, key: 'request-1');
+
+      expect(output, hasLength(2));
+      expect(output.first, contains('first line'));
+      expect(output.first, contains('second line'));
+      expect(output.first.split('\n').length, greaterThan(2));
+      expect(output.last, contains('REQUEST'));
+      expect(output.last, contains('RESPONSE  200 OK'));
+    });
+
     test('fully redacts non-authorization secrets', () {
       logger
         ..logRequest(

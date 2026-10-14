@@ -131,6 +131,9 @@ that tells `ConnectivityService` the server answered, and the debug-only
 authentication) through the `interceptors` parameter of `createDioClient`, which
 runs before the logger. Use the registered singleton `LoggerService` for
 application diagnostics; do not introduce direct `print` or `debugPrint` calls.
+`LoggerService` writes each message or HTTP exchange as one block through
+`dart:developer`, so logs appear in the IDE debug console and DevTools (not in
+a terminal `flutter run`) without a per-line `flutter:` prefix.
 
 Environment behavior is intentional:
 

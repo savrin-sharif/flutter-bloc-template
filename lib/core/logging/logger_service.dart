@@ -1,20 +1,26 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-typedef LogOutput = void Function(String message);
+/// Receives one complete, multi-line log block.
+typedef LogOutput = void Function(String block);
 
 /// Lightweight application logger with formatted diagnostic and HTTP output.
 ///
 /// Logging is disabled in release builds by default. HTTP requests are buffered
-/// until their response arrives so each exchange is printed as a single block.
+/// until their response arrives so each exchange is written as a single block.
+///
+/// Output goes through `dart:developer`, so it appears in the IDE debug console
+/// and DevTools without the per-line `flutter:` prefix or the system-log
+/// truncation that `print` has. A terminal `flutter run` does not show it.
 class LoggerService {
   factory LoggerService() => _instance;
 
   LoggerService._internal({bool? enabled, LogOutput? output})
     : enabled = enabled ?? kDebugMode,
-      _output = output ?? _printLine;
+      _output = output ?? _writeToDeveloperLog;
 
   /// Creates an isolated logger for tests without changing the app singleton.
   @visibleForTesting
@@ -172,9 +178,7 @@ class LoggerService {
     lines.add(
       '$_bold$_white$_boxBottomLeft${_boxHorizontal * _boxWidth}$_reset',
     );
-    for (final line in lines) {
-      _output(line);
-    }
+    _output(lines.join('\n'));
   }
 
   void _log(String color, String emoji, String level, String message) {
@@ -190,9 +194,7 @@ class LoggerService {
           .map((line) => '$vertical  $color$emoji  $line$_reset'),
       '$_bold$_white$_boxBottomLeft${_boxHorizontal * _boxWidth}$_reset',
     ];
-    for (final line in lines) {
-      _output(line);
-    }
+    _output(lines.join('\n'));
   }
 
   String _timestamp(DateTime dateTime) =>
@@ -417,11 +419,7 @@ class LoggerService {
     return '$_jsonPunctuation$value$_reset';
   }
 
-  static void _printLine(String message) {
-    // Printing each line separately avoids truncating large HTTP responses.
-    // ignore: avoid_print
-    print(message);
-  }
+  static void _writeToDeveloperLog(String block) => developer.log(block);
 }
 
 class _RequestBuffer {
