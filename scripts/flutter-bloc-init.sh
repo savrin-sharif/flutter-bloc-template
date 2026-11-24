@@ -1152,6 +1152,16 @@ LOCAL_URL=$LOCAL_URL
 APP_DESIGN_STYLE=$DESIGN_STYLE
 EOF
 
+if [[ -f "$PROJECT_NAME/.gitignore" ]] && \
+  ! grep -qF 'assets/envs/.env' "$PROJECT_NAME/.gitignore"; then
+  cat >> "$PROJECT_NAME/.gitignore" <<'EOF'
+
+# Env files (do not commit). Copy .env.example to .env for local runs.
+assets/envs/.env
+assets/envs/.env.local
+EOF
+fi
+
 if [[ "$ENABLE_BILINGUAL" == true ]]; then
   [[ "$MODERN_UI" != true ]] && printf 'Adding %s/%s localization...\n' "$PRIMARY_LOCALE" "$SECONDARY_LOCALE"
   APP_TITLE_JSON="$(perl -MJSON::PP -e 'print encode_json($ARGV[0])' "$APP_TITLE")"
@@ -1237,6 +1247,8 @@ PRIMARY_LOCALE=$PRIMARY_LOCALE
 SECONDARY_LOCALE=$SECONDARY_LOCALE
 EOF
 fi
+
+cp "$PROJECT_NAME/assets/envs/.env" "$PROJECT_NAME/assets/envs/.env.example"
 
 finalize_project() {
   cd "$PROJECT_NAME"

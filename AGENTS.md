@@ -38,7 +38,9 @@ Before changing anything:
 
 1. Read `README.md`, `pubspec.yaml`, `analysis_options.yaml`, and the relevant
    files under `lib/`, `test/`, and `docs/`.
-2. Inspect `assets/envs/.env`, but never expose secrets or commit real secrets.
+2. Inspect `assets/envs/.env` (local; copy from the committed
+   `assets/envs/.env.example` if missing). Never expose secrets or commit
+   real secrets — `.env` is gitignored.
 3. Confirm the generated package name from `pubspec.yaml`; never assume it is
    `flutter_bloc_template`.
 4. Inspect `lib/core/config/app_config.dart`, `lib/core/network/dio_client.dart`,

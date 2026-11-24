@@ -63,7 +63,11 @@ flutter pub get
 flutter run
 ```
 
-Configuration lives in `assets/envs/.env`:
+Configuration lives in `assets/envs/.env` (gitignored). Copy the sample first:
+
+```sh
+cp assets/envs/.env.example assets/envs/.env
+```
 
 ```dotenv
 APP_NAME=Flutter BLoC Template

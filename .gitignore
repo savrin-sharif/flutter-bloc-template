@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Env files (do not commit). Copy .env.example to .env for local runs.
+assets/envs/.env
+assets/envs/.env.local
