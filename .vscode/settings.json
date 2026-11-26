@@ -1,0 +1,9 @@
+{
+  // Dart 3.14 / Flutter 3.50+ harden VM Service Host/Origin checks. Wireless
+  // iOS debugging uses the phone's LAN IP, which the service rejects with 403
+  // ("WebSocket … not upgraded"). USB (127.0.0.1) is unaffected. Safe on a
+  // trusted LAN only — this disables that check for `flutter run` from the IDE.
+  "dart.flutterRunAdditionalArgs": [
+    "--disable-service-origin-check"
+  ]
+}

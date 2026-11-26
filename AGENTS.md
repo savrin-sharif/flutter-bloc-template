@@ -40,7 +40,12 @@ Before changing anything:
    files under `lib/`, `test/`, and `docs/`.
 2. Inspect `assets/envs/.env` (local; copy from the committed
    `assets/envs/.env.example` if missing). Never expose secrets or commit
-   real secrets — `.env` is gitignored.
+   real secrets — `.env` is gitignored. On Flutter 3.50.0 Android, keep the
+   `androidResources.ignoreAssetsPattern` override in
+   `android/app/build.gradle.kts` so AGP does not drop the dotted `.env`
+   asset (fixed upstream in 3.50.1). Do not rename to a non-dotted file
+   unless also updating `bootstrap()`, `pubspec.yaml` assets, gitignore,
+   and the initializer.
 3. Confirm the generated package name from `pubspec.yaml`; never assume it is
    `flutter_bloc_template`.
 4. Inspect `lib/core/config/app_config.dart`, `lib/core/network/dio_client.dart`,
@@ -58,13 +63,21 @@ Before changing anything:
    dependency-injection, routing, and testing conventions.
 9. Check the current Git diff before editing. Preserve unrelated user changes.
 
+Import Material and Cupertino from the standalone packages
+`package:material_ui/material_ui.dart` and
+`package:cupertino_ui/cupertino_ui.dart`. Do not add new
+`package:flutter/material.dart` or `package:flutter/cupertino.dart` imports
+(deprecated since Flutter 3.50). Prefer `go_router` ^18, which already targets
+those packages.
+
 When the selected root is Cupertino, do not assume that placing a Material
 widget inside a `Material` canvas makes it compatible. Material-only widgets
-may require localizations beyond the `DefaultMaterialLocalizations` the root
-provides. Before adding a Material-dependent package or widget, inspect its
-localization requirements and either use an adaptive alternative or provide
-the required scoped localizations. Verify the screen under both generated
-design modes when the feature is shared by Material and Cupertino roots.
+need `GlobalMaterialLocalizations.delegates` from `material_ui` on the
+`CupertinoApp` (the template already sets this). Before adding a
+Material-dependent package or widget, inspect its localization requirements
+and either use an adaptive alternative or provide the required scoped
+localizations. Verify the screen under both generated design modes when the
+feature is shared by Material and Cupertino roots.
 
 Do not replace BLoC with GetX, Riverpod, Provider, or another state manager. Do
 not add a second HTTP client, service locator, router, or competing architecture.
@@ -84,7 +97,7 @@ lib/
 │   ├── network/                 # Dio, API error parsing, connectivity
 │   ├── presentation/mixins/     # Shared BLoC behavior
 │   ├── router/                  # go_router graph
-│   └── theme/                   # Material/Cupertino themes
+│   └── theme/                   # material_ui / cupertino_ui themes
 ├── shared/                      # Existing cross-feature UI and utilities
 └── features/<feature>/
     ├── data/
@@ -545,6 +558,13 @@ If authentication is requested:
   Do not weaken this redaction; add a key pattern if an API uses another
   secret name.
 - Do not place secrets in `.env` assets: Flutter asset values ship with the app.
+- Load env through `dotenv.load(fileName: 'assets/envs/.env')` in
+  `bootstrap()` (or `loadFromString` in tests). Preserve the Android
+  `ignoreAssetsPattern` workaround while targeting Flutter 3.50.0.
+- Wireless iOS debugging on Flutter 3.50+ needs
+  `--disable-service-origin-check` (committed in `.vscode/settings.json` as
+  `dart.flutterRunAdditionalArgs`). Keep that flag when adjusting run args;
+  USB is fine without it. Trusted LAN only.
 - Treat client-side authorization checks as UX only; the server remains the
   authority.
 
@@ -606,7 +626,9 @@ Before declaring completion, confirm:
 - [ ] `lib/shared/` was inspected and suitable reusable components were reused.
 - [ ] Any required new shared widget has a focused API and appropriate tests.
 - [ ] DI and routes are complete.
-- [ ] Material/Cupertino and localization choices are preserved.
+- [ ] Material/Cupertino and localization choices are preserved; UI
+      imports use `material_ui` / `cupertino_ui`, not the deprecated
+      `package:flutter/material.dart` or `package:flutter/cupertino.dart`.
 - [ ] Custom fonts come from `google_fonts` through `AppTheme`; no font files
       or `fonts:` entries were added.
 - [ ] Unrelated files and user changes are untouched.

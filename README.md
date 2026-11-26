@@ -8,6 +8,7 @@ A deliberately small, production-minded Flutter starter using BLoC and clean arc
 - `flutter_bloc` for predictable state management
 - A reusable async-controller mixin with keyed loading and normalized Dio errors
 - `go_router` shared by `MaterialApp.router` and `CupertinoApp.router`
+- Standalone `material_ui` / `cupertino_ui` design packages (Flutter 3.50+)
 - Native `Scaffold`/Material controls and `CupertinoPageScaffold`/Cupertino controls
 - Material/Cupertino design choice during project generation
 - Optional two-language ARB/gen-l10n setup during project generation
@@ -35,7 +36,7 @@ The initializer prompts for the project name, app title, production/development/
 
 The entered app title is the single display-name source: it is written to `APP_NAME` and synchronized with the generated Android, iOS, macOS, web, Windows, and Linux metadata.
 
-Each generated `pubspec.yaml` receives its Dart SDK constraint from the active Flutter toolchain instead of retaining the template's minimum SDK version. For example, an installed Dart `3.13.0` produces `sdk: ^3.13.0`.
+Each generated `pubspec.yaml` receives its Dart SDK constraint from the active Flutter toolchain instead of retaining the template's minimum SDK version. For example, an installed Dart `3.14.0` (Flutter 3.50) produces `sdk: ^3.14.0`.
 
 Interactive terminals receive the color interface, blinking input cursor, keyboard menus, and animated progress indicators. During initial text setup, ↑ or ← returns to the previous field. Every later menu provides access to completed configuration sections, allowing individual values to be changed without clearing other selections. Use ↑/↓ and Enter for menu choices; the platform checklist uses Space to toggle and B to edit previous configuration. Before generation, a review screen also lets users revisit any section repeatedly. Press Esc or Ctrl+C to exit at any time. Failed Git or Flutter steps show Retry and Exit choices instead of terminating immediately. CI and plain output provide equivalent editing, review, retry, and exit prompts.
 
@@ -63,6 +64,30 @@ flutter pub get
 flutter run
 ```
 
+### Wireless iOS debugging (VM Service 403)
+
+On Flutter 3.50 / Dart 3.14+, the VM Service rejects non-loopback `Host` / `Origin` headers. USB debugging (`127.0.0.1`) still works; Wi‑Fi attach fails with `WebSocket … not upgraded … 403`.
+
+This template’s `.vscode/settings.json` already passes `--disable-service-origin-check` to IDE `flutter run` sessions. From a terminal on a trusted LAN:
+
+```sh
+flutter run --disable-service-origin-check
+```
+
+Optional shell wrapper so plain `flutter run` / `flutter attach` include the flag:
+
+```sh
+flutter() {
+  if [[ "$1" == "run" || "$1" == "attach" ]]; then
+    command flutter "$1" --disable-service-origin-check "${@:2}"
+  else
+    command flutter "$@"
+  fi
+}
+```
+
+Only use this on networks you trust — it turns off a VM Service security check.
+
 Configuration lives in `assets/envs/.env` (gitignored). Copy the sample first:
 
 ```sh
@@ -76,6 +101,8 @@ DEV_URL=https://dev-api.example.com
 LOCAL_URL=http://localhost:8080
 APP_DESIGN_STYLE=material
 ```
+
+`bootstrap()` loads that asset with `dotenv.load(fileName: 'assets/envs/.env')`. On Flutter **3.50.0**, Android's default asset filter would omit `.env` from the APK; `android/app/build.gradle.kts` overrides `androidResources.ignoreAssetsPattern` so the file is packaged. Upgrade to Flutter **3.50.1+** when you can — that release fixes the regression upstream.
 
 Set `APP_DESIGN_STYLE` to `material` or `cupertino`. Normally the initializer writes this value based on the user's design prompt.
 

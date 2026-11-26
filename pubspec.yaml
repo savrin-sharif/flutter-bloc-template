@@ -6,20 +6,22 @@ version: 1.0.0+1
 
 # SDK
 environment:
-  sdk: ^3.13.0
+  sdk: ^3.14.0
 
 # Application dependencies
 dependencies:
   flutter:
     sdk: flutter
+  material_ui: ^1.11.1
+  cupertino_ui: ^1.1.7
   cupertino_icons: ^1.0.8
   flutter_bloc: ^9.1.1
   equatable: ^2.1.0
-  go_router: ^17.3.0
-  get_it: ^9.2.1
-  dio: ^5.10.0
-  connectivity_plus: ^7.3.0
-  flutter_dotenv: ^6.0.1
+  go_router: ^18.1.4
+  get_it: ^9.3.0
+  dio: ^5.11.1
+  connectivity_plus: ^7.3.2
+  flutter_dotenv: ^6.0.2
 
 # Development dependencies
 dev_dependencies:

@@ -1062,7 +1062,7 @@ if [[ "$USE_CUSTOM_ORG" == true ]]; then
   fi
 fi
 
-for path in lib assets test docs AGENTS.md analysis_options.yaml README.md pubspec.yaml; do
+for path in lib assets test docs AGENTS.md analysis_options.yaml README.md pubspec.yaml .vscode; do
   if [[ -e "$TEMPLATE_DIR/$path" ]]; then
     rm -rf "$PROJECT_NAME/$path"
     cp -R "$TEMPLATE_DIR/$path" "$PROJECT_NAME/$path"
@@ -1177,6 +1177,9 @@ template-arb-file: app_$PRIMARY_LOCALE.arb
 output-dir: lib/l10n/generated
 output-localization-file: app_localizations.dart
 nullable-getter: false
+# Flutter 3.50 gen-l10n still imports deprecated flutter_localizations
+# Material/Cupertino delegates; remove once the SDK fix ships.
+header: '// ignore_for_file: deprecated_member_use'
 EOF
 
   cat > "$PROJECT_NAME/lib/l10n/app_$PRIMARY_LOCALE.arb" <<EOF
@@ -1197,8 +1200,8 @@ EOF
 EOF
 
   cat > "$PROJECT_NAME/lib/app/app.dart" <<EOF
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:$PROJECT_NAME/l10n/generated/app_localizations.dart';
 
 import '../core/config/app_config.dart';
@@ -1208,6 +1211,15 @@ import '../core/theme/app_theme.dart';
 class App extends StatelessWidget {
   const App({super.key});
 
+  // Flutter 3.50 gen-l10n still wires deprecated flutter_localizations
+  // delegates into AppLocalizations.localizationsDelegates. Compose
+  // AppLocalizations.delegate with material_ui's GlobalMaterialLocalizations
+  // so Material/Cupertino strings resolve for every supported locale.
+  static const _localizationsDelegates = [
+    AppLocalizations.delegate,
+    ...GlobalMaterialLocalizations.delegates,
+  ];
+
   @override
   Widget build(BuildContext context) {
     if (AppConfig.designStyle == AppDesignStyle.cupertino) {
@@ -1215,7 +1227,7 @@ class App extends StatelessWidget {
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.cupertino,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: _localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: appRouter,
         builder: AppTheme.withSystemUiOverlay,
@@ -1227,7 +1239,7 @@ class App extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.materialLight,
       darkTheme: AppTheme.materialDark,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: _localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: appRouter,
       builder: AppTheme.withSystemUiOverlay,
@@ -1240,7 +1252,7 @@ EOF
   perl -i -pe 's/state\.info!\.title/AppLocalizations.of(context).welcomeTitle/g; s/state\.info!\.description/AppLocalizations.of(context).welcomeMessage/g' "$PROJECT_NAME/lib/features/welcome/presentation/pages/playground_page.dart"
 
   perl -0777 -i -pe "s|(import 'package:flutter_dotenv/flutter_dotenv.dart';)|import 'package:$PROJECT_NAME/l10n/generated/app_localizations.dart';\n\$1|" "$PROJECT_NAME/test/widget_test.dart"
-  perl -0777 -i -pe 's/const MaterialApp\(home: PlaygroundPage\(\)\)/MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const PlaygroundPage())/g; s/const CupertinoApp\(home: PlaygroundPage\(\)\)/CupertinoApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const PlaygroundPage())/g' "$PROJECT_NAME/test/widget_test.dart"
+  perl -0777 -i -pe 's/const MaterialApp\(home: PlaygroundPage\(\)\)/MaterialApp(localizationsDelegates: const [AppLocalizations.delegate, ...GlobalMaterialLocalizations.delegates], supportedLocales: AppLocalizations.supportedLocales, home: const PlaygroundPage())/g; s/const CupertinoApp\(home: PlaygroundPage\(\)\)/CupertinoApp(localizationsDelegates: const [AppLocalizations.delegate, ...GlobalMaterialLocalizations.delegates], supportedLocales: AppLocalizations.supportedLocales, home: const PlaygroundPage())/g' "$PROJECT_NAME/test/widget_test.dart"
 
   cat >> "$PROJECT_NAME/assets/envs/.env" <<EOF
 PRIMARY_LOCALE=$PRIMARY_LOCALE

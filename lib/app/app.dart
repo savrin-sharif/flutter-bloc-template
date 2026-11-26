@@ -1,5 +1,5 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../core/config/app_config.dart';
 import '../core/router/app_router.dart';
@@ -16,8 +16,8 @@ class App extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.cupertino,
         // Material widgets used inside Cupertino routes (text fields,
-        // date pickers, etc.) require MaterialLocalizations.
-        localizationsDelegates: const [DefaultMaterialLocalizations.delegate],
+        // date pickers, etc.) require MaterialLocalizations from material_ui.
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         routerConfig: appRouter,
         builder: AppTheme.withSystemUiOverlay,
       );
