@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # -----------------------------
@@ -6,12 +6,22 @@ set -e
 # Choose REUSE interactively, or pass --reuse-version for a non-interactive build.
 # -----------------------------
 
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/android_release_signing.sh
+source "$script_dir/lib/android_release_signing.sh"
+
 reuse_pubspec_version=false
 dry_run=false
+skip_signing_prompt=false
 for argument in "$@"; do
   case "$argument" in
     --reuse-version) reuse_pubspec_version=true ;;
     --dry-run) dry_run=true ;;
+    --skip-signing-prompt) skip_signing_prompt=true ;;
   esac
 done
 
@@ -213,6 +223,21 @@ else
 fi
 echo "✅ Release Name: $release_name"
 
+# 4.2 First-release / Play upload signing (required — debug AABs are rejected).
+if [ "$skip_signing_prompt" = true ]; then
+  if ! is_android_release_signing_configured; then
+    echo "❌ --skip-signing-prompt requires android/key.properties + upload keystore."
+    exit 1
+  fi
+  if android_release_uses_debug_signing; then
+    echo "❌ android/app/build.gradle.kts still hard-codes debug signing."
+    exit 1
+  fi
+  echo "✅ Skipping signing prompt — existing release keystore will be used."
+else
+  ensure_android_release_signing
+fi
+
 # 5. Update pubspec.yaml only when this build owns the version bump.
 if [ "$reuse_pubspec_version" = false ]; then
   sed -i.bak -E "s/^version: .*/version: $next_version+$next_build_number/" pubspec.yaml
@@ -244,6 +269,7 @@ mkdir -p "$release_folder"
 target_aab="$release_folder/app-release-${next_version}+${next_build_number}.aab"
 cp "$aab_path" "$target_aab"
 echo "📦 AAB copied to: $target_aab"
+verify_aab_release_signed "$target_aab"
 
 # 9. Git operations (commit + tag)
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then

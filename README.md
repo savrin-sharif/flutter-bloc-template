@@ -181,7 +181,7 @@ flutter test
 
 ## Release scripts
 
-- `scripts/release_aab.sh` bumps the version and builds a Play Store AAB.
+- `scripts/release_aab.sh` bumps the version and builds a Play Store AAB. On first release it can create the Android upload keystore + `android/key.properties` so the AAB is release-signed (Play rejects debug-signed bundles).
 - `scripts/release_bumper.sh` bumps the version and builds split-per-ABI APKs.
 - `scripts/release_ios.sh` bumps the version and builds an IPA.
 
